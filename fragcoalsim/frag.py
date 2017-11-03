@@ -12,12 +12,22 @@ from fragcoalsim import stats
 _LOG = logging.getLogger(__name__)
 
 
+def get_expected_divergence_between_fragments(
+        generations_since_fragmentation = 10.0,
+        effective_pop_size_of_ancestor = 1000,
+        mutation_rate = 1e-8):
+    expected_coal_time = 2.0 * effective_pop_size_of_ancestor
+    expected_branch_length = expected_coal_time + generations_since_fragmentation
+    gens_diverging = expected_branch_length * 2.0
+    expected_divergence = gens_diverging * mutation_rate
+    return expected_divergence
+
+
 class FragmentationModel(object):
     def __init__(self,
             seed,
             number_of_fragments = 5,
             number_of_genomes_per_fragment = 1,
-            sequence_length = 1000,
             generations_since_fragmentation = 10.0,
             effective_pop_size_of_fragment = 100,
             effective_pop_size_of_ancestor = 1000,
@@ -25,7 +35,6 @@ class FragmentationModel(object):
             migration_rate = 0.0):
         self._number_of_fragments = number_of_fragments
         self._sample_size = number_of_genomes_per_fragment
-        self._sequence_length = sequence_length
         self._generations_since_fragmentation = generations_since_fragmentation
         self._fragment_population_size = effective_pop_size_of_fragment
         self._ancestral_population_size = effective_pop_size_of_ancestor
@@ -76,7 +85,7 @@ class FragmentationModel(object):
         return msprime.simulate(
                 sample_size = None, # will be determined from pop configs
                 Ne = 1.0, # reference effective pop size,
-                length = self._sequence_length,
+                length = 1,
                 recombination_rate = 0.0,
                 mutation_rate = self._mutation_rate,
                 population_configurations = self._population_configs,
@@ -148,11 +157,6 @@ class FragmentationModel(object):
 
     migration_rate_matrix = property(_get_migration_rate_matrix)
 
-    def _get_sequence_length(self):
-        return self._sequence_length
-
-    sequence_length = property(_get_sequence_length)
-
 
 class FragmentationDiversityTracker(object):
     def __init__(self,
@@ -163,7 +167,6 @@ class FragmentationDiversityTracker(object):
             number_of_simulations_per_sample = 1000,
             number_of_fragments = 5,
             number_of_genomes_per_fragment = 1,
-            sequence_length = 1000,
             effective_pop_size_of_fragment = 100,
             effective_pop_size_of_ancestor = 1000,
             mutation_rate = 1e-8,
@@ -182,7 +185,6 @@ class FragmentationDiversityTracker(object):
                     seed = self._get_model_seed(),
                     number_of_fragments = number_of_fragments,
                     number_of_genomes_per_fragment = number_of_genomes_per_fragment,
-                    sequence_length = sequence_length,
                     generations_since_fragmentation = year / self._generation_time,
                     effective_pop_size_of_fragment = effective_pop_size_of_fragment,
                     effective_pop_size_of_ancestor = effective_pop_size_of_ancestor,

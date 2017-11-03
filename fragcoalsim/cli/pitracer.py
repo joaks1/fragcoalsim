@@ -15,11 +15,58 @@ def main(argv = sys.argv):
     fragcoalsim.write_splash(sys.stderr)
     parser = argparse.ArgumentParser()
 
+    parser.add_argument('-f', '--number-of-fragments',
+            action = 'store',
+            default = 2,
+            type = fragcoalsim.argparse_utils.arg_is_positive_int,
+            help = ('Number of fragments. Default: 2'))
+    parser.add_argument('-g', '--number-of-sampled-gene-copies',
+            action = 'store',
+            default = 1,
+            type = fragcoalsim.argparse_utils.arg_is_positive_int,
+            help = ('Number of sampled gene copies per fragment. Default: 1'))
+    parser.add_argument('-r', '--number-of-replicates',
+            action = 'store',
+            default = 10000,
+            type = fragcoalsim.argparse_utils.arg_is_positive_int,
+            help = ('Number of coalescent simulations to run per taxon and per '
+                    'sampled year. Default: 10000'))
     parser.add_argument('-y', '--years-to-sample',
-            nargs = '+',
+            nargs = '?',
             type = fragcoalsim.argparse_utils.arg_is_nonnegative_float,
             help = ('Years to sample diversity following fragmentation.'))
-    parser.add_argument('-s', '--seed',
+    parser.add_argument('--ancestral-pop-sizes',
+            nargs = '?',
+            default = [],
+            type = fragcoalsim.argparse_utils.arg_is_positive_float,
+            help = ('Effective population size before fragmentation for each '
+                    'taxon.'))
+    parser.add_argument('--fragment-pop-sizes',
+            nargs = '?',
+            default = [],
+            type = fragcoalsim.argparse_utils.arg_is_positive_float,
+            help = ('Effective fragement population size for each taxon.'))
+    parser.add_argument('--mutation-rates',
+            nargs = '?',
+            default = [],
+            type = fragcoalsim.argparse_utils.arg_is_positive_float,
+            help = ('Mutation rate for each taxon.'))
+    parser.add_argument('--migration-rates',
+            nargs = '?',
+            default = [],
+            type = fragcoalsim.argparse_utils.arg_is_positive_float,
+            help = ('Migration rate for each taxon.'))
+    parser.add_argument('--generation-times',
+            nargs = '?',
+            default = [],
+            type = fragcoalsim.argparse_utils.arg_is_positive_float,
+            help = ('Generation time of each taxon.'))
+    parser.add_argument('-l', '--labels',
+            nargs = '?',
+            default = [],
+            type = str,
+            help = ('Labels for each taxon.'))
+    parser.add_argument('--seed',
             action = 'store',
             type = fragcoalsim.argparse_utils.arg_is_positive_int,
             help = ('Seed for random number generator.'))
@@ -28,7 +75,7 @@ def main(argv = sys.argv):
             type = str,
             default = "",
             help = ('A prefix to prepend to all output files.'))
-    parser.add_argument('-f', '--force',
+    parser.add_argument('--force',
             action = 'store_true',
             help = ('Overwrite any existing output files. By default, an error '
                     'is thrown if an output path exists.'))
@@ -71,8 +118,67 @@ def main(argv = sys.argv):
                 raise Exception(
                         "\nERROR: File {0!r} already exists.\n"
                         "Use \'-p/--prefix\' option to specify a different prefix,\n"
-                        "or the \'-f/--force\' option to overwrite existing "
+                        "or the \'--force\' option to overwrite existing "
                         "files.".format(p))
+
+    number_of_taxa = max([
+            len(args.labels),
+            len(args.mutation_rates),
+            len(args.generation_times),
+            len(args.migration_rates),
+            len(args.ancestral_pop_sizes),
+            len(args.fragment_pop_sizes),
+            ])
+    if number_of_taxa < 1:
+        number_of_taxa = 1
+
+    if not args.labels:
+        args.labels = [str(i + 1) for i in range(number_of_taxa)]
+    else:
+        assert len(args.labels) == number_of_taxa, (
+                "The length of taxon-specific arguments must match")
+
+    if not args.mutation_rates:
+        args.mutation_rates = [1e-7 for i in range(number_of_taxa)]
+    else:
+        assert len(args.mutation_rates) == number_of_taxa, (
+                "The length of taxon-specific arguments must match")
+
+    if not args.migration_rates:
+        args.migration_rates = [0.0 for i in range(number_of_taxa)]
+    else:
+        assert len(args.migration_rates) == number_of_taxa, (
+                "The length of taxon-specific arguments must match")
+
+    if not args.generation_times:
+        args.generation_times = [1.0 for i in range(number_of_taxa)]
+    else:
+        assert len(args.generation_times) == number_of_taxa, (
+                "The length of taxon-specific arguments must match")
+
+    if not args.ancestral_pop_sizes:
+        args.ancestral_pop_sizes = [10000.0 for i in range(number_of_taxa)]
+    else:
+        assert len(args.ancestral_pop_sizes) == number_of_taxa, (
+                "The length of taxon-specific arguments must match")
+
+    if not args.fragment_pop_sizes:
+        args.fragment_pop_sizes = [10000.0 for i in range(number_of_taxa)]
+    else:
+        assert len(args.fragment_pop_sizes) == number_of_taxa, (
+                "The length of taxon-specific arguments must match")
+
+    sys.stdout.write("label\tmutation_rate\tgeneration_time\tancestral_pop_size\tfragment_pop_size\tmigration_rate\n")
+    for i in range(number_of_taxa):
+        sys.stdout.write("{label}\t{mutation_rate}\t{generation_time}\t{ancestral_pop_size}\t{fragment_pop_size}\t{migration_rate}\n".format(
+                label = args.labels[i],
+                mutation_rate = args.mutation_rates[i],
+                generation_time = args.generation_times[i],
+                ancestral_pop_size = args.ancestral_pop_sizes[i],
+                fragment_pop_size = args.fragment_pop_sizes[i],
+                migration_rate = args.migration_rates[i]))
+
+
 
 
     pi_tracer = fragcoalsim.frag.FragmentationDiversityTracker(
