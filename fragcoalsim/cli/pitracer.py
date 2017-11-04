@@ -123,16 +123,6 @@ def main(argv = sys.argv):
             action = 'store_true',
             help = ('Overwrite any existing output files. By default, an error '
                     'is thrown if an output path exists.'))
-    # parser.add_argument('--x-label',
-    #         action = 'store',
-    #         type = str,
-    #         default = "Time",
-    #         help = ('Label for the X-axis. Default: \'Time\'.'))
-    # parser.add_argument('--y-label',
-    #         action = 'store',
-    #         type = str,
-    #         default = "Diversity",
-    #         help = ('Label for the Y-axis. Default: \'Diversity\'.'))
     parser.add_argument('--no-plot',
             action = 'store_true',
             help = ('Skip plotting; only report summary table.'))
@@ -153,12 +143,13 @@ def main(argv = sys.argv):
 
     expected_div_path = prefix + "pitracer-plot-expected-div.pdf"
     sim_div_path = prefix + "pitracer-plot-sim-div.pdf"
+    overlay_path = prefix + "pitracer-plot-overlay.pdf"
     output_dir = os.path.dirname(expected_div_path)
     if not output_dir:
         output_dir = os.curdir
 
     if not args.force:
-        for p in [expected_div_path, sim_div_path]:
+        for p in [expected_div_path, sim_div_path, overlay_path]:
             if os.path.exists(p):
                 raise Exception(
                         "\nERROR: File {0!r} already exists.\n"
@@ -246,6 +237,7 @@ def main(argv = sys.argv):
     if args.no_plot:
         sys.exit(0)
 
+    # Expected divergenc plot
     plt.close('all')
     fig = plt.figure(figsize = (4, 3))
     gs = gridspec.GridSpec(1, 1,
@@ -276,6 +268,7 @@ def main(argv = sys.argv):
     gs.update(left = 0.14, right = 0.995, bottom = 0.14, top = 0.995)
     plt.savefig(expected_div_path)
 
+    # Simulation plot
     plt.close('all')
     fig = plt.figure(figsize = (4, 3))
     gs = gridspec.GridSpec(1, 1,
@@ -290,7 +283,7 @@ def main(argv = sys.argv):
         line, = ax.plot(
                 pi_tracer.years,
                 [s.mean for s in pi_tracer.pi_samples],
-                label = args.labels[i]
+                label = args.labels[i],
                 )
         plt.setp(line,
                 marker = 'o',
@@ -300,15 +293,91 @@ def main(argv = sys.argv):
                 linestyle = '-',
                 linewidth = 2,
                 color = line_color,
+                zorder = 200,
                 rasterized = False)
     xlabel_text = ax.set_xlabel("Years since fragmentation")
-    ylabel_text = ax.set_ylabel("Expected diversity")
+    ylabel_text = ax.set_ylabel("Diversity")
     plot_legend = ax.legend(
             loc = 'best',
             ncol = 1,
-            edgecolor = 'none')
+            edgecolor = "none")
     gs.update(left = 0.14, right = 0.995, bottom = 0.14, top = 0.995)
     plt.savefig(sim_div_path)
+
+    # Overlay plot
+    plt.close('all')
+    fig = plt.figure(figsize = (4, 3))
+    gs = gridspec.GridSpec(1, 1,
+            wspace = 0.0,
+            hspace = 0.0)
+    ax = plt.subplot(gs[0, 0])
+    for i, pi_tracer in enumerate(tracers):
+        if i < len(palette):
+            line_color = palette[i]
+        else:
+            line_color = palette[-1]
+        line, = ax.plot(
+                pi_tracer.years,
+                [s.mean for s in pi_tracer.pi_samples],
+                label = "{0} mean $\\pi$".format(args.labels[i]),
+                )
+        plt.setp(line,
+                marker = 'o',
+                markerfacecolor = line_color,
+                markeredgecolor = line_color,
+                markersize = 3.5,
+                linestyle = '--',
+                linewidth = 2,
+                color = line_color,
+                zorder = 200,
+                rasterized = False)
+        line, = ax.plot(
+                pi_tracer.years,
+                [m.expected_divergence_between_fragments for m in pi_tracer.fragmentation_models],
+                label = "{0} expected $\\pi_F$".format(args.labels[i]),
+                )
+        plt.setp(line,
+                linestyle = '-',
+                linewidth = 2,
+                color = line_color,
+                alpha = 0.5,
+                zorder = 100,
+                rasterized = False)
+    xlabel_text = ax.set_xlabel("Years since fragmentation")
+    ylabel_text = ax.set_ylabel("Diversity")
+    line_types = []
+    line_colors = []
+    for ls in ['--', '-']:
+        line_types.append(ax.plot([],[], color = "black", ls = ls)[0])
+    for i in range(number_of_taxa):
+        line_colors.append(ax.plot([],[], color = palette[i], ls = '-')[0])
+    lines = ax.get_lines()
+    legend1 = plt.legend(
+            line_colors,
+            args.labels,
+            loc = "center right",
+            ncol = 1,
+            edgecolor = "none",
+            )
+    plt.legend(bbox_to_anchor=(0.0, 1.02, 1.0, 1.02), loc=3,
+       ncol=2, mode="expand", borderaxespad=0.)
+    legend2 = plt.legend(
+            line_types, 
+            [
+                    "Mean diversity ($\\bar{{\\pi}}$)",
+                    "Expected divergence ($\\pi_F$)"
+            ],
+            # bbox_to_anchor = (0.0, 1.02, 1.0, 1.02),
+            # loc = "lower left",
+            # ncol = 2,
+            # mode = "expand",
+            # borderaxespad = 0.0,
+            loc = "upper left",
+            edgecolor = "none",
+            )
+    ax.add_artist(legend1)
+    gs.update(left = 0.14, right = 0.995, bottom = 0.14, top = 0.995)
+    plt.savefig(overlay_path)
 
 if __name__ == "__main__":
     main()
