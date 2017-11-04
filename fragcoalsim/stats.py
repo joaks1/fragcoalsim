@@ -7,6 +7,10 @@ import operator
 import decimal
 import fractions
 import logging
+try:
+    from StringIO import StringIO
+except ImportError:
+    from io import StringIO
 
 _LOG = logging.getLogger(__name__)
 
