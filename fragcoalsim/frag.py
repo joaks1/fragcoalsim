@@ -44,6 +44,11 @@ class FragmentationModel(object):
         self._seed = seed
         self._rng = random.Random()
         self._rng.seed(self._seed)
+        
+        self._expected_div_between_fragments = get_expected_divergence_between_fragments(
+                generations_since_fragmentation = self._generations_since_fragmentation,
+                effective_pop_size_of_ancestor = self._ancestral_population_size,
+                mutation_rate = self._mutation_rate)
 
         self._population_configs = []
         self._population_splits = []
@@ -97,6 +102,10 @@ class FragmentationModel(object):
     def sample_pi(self, number_of_replicates):
         return (x.get_pairwise_diversity() for x in self.simulate(
                 number_of_replicates))
+
+    def _get_expected_div_between_fragments(self):
+        return self._expected_div_between_fragments
+    expected_divergence_between_fragments = property(_get_expected_div_between_fragments)
 
     def _get_seed(self):
         return self._seed
@@ -178,18 +187,26 @@ class FragmentationDiversityTracker(object):
         self._generation_time = float(generation_time)
         self._number_of_simulations = number_of_simulations_per_sample
         assert len(self._years_to_sample) > 0
+
+        self._number_of_fragments = number_of_fragments
+        self._sample_size = number_of_genomes_per_fragment
+        self._fragment_population_size = effective_pop_size_of_fragment
+        self._ancestral_population_size = effective_pop_size_of_ancestor
+        self._mutation_rate = mutation_rate
+        self._migration_rate = migration_rate
+
         self.fragmentation_models = []
         self.pi_samples = []
         for year in self._years_to_sample:
             frag_model = FragmentationModel(
                     seed = self._get_model_seed(),
-                    number_of_fragments = number_of_fragments,
-                    number_of_genomes_per_fragment = number_of_genomes_per_fragment,
+                    number_of_fragments = self._number_of_fragments,
+                    number_of_genomes_per_fragment = self._sample_size,
                     generations_since_fragmentation = year / self._generation_time,
-                    effective_pop_size_of_fragment = effective_pop_size_of_fragment,
-                    effective_pop_size_of_ancestor = effective_pop_size_of_ancestor,
-                    mutation_rate = mutation_rate,
-                    migration_rate = migration_rate)
+                    effective_pop_size_of_fragment = self._fragment_population_size,
+                    effective_pop_size_of_ancestor = self._ancestral_population_size,
+                    mutation_rate = self._mutation_rate,
+                    migration_rate = self._migration_rate)
             self.fragmentation_models.append(frag_model)
             pi_summary = stats.SampleSummarizer(
                     frag_model.sample_pi(self._number_of_simulations))
@@ -206,10 +223,6 @@ class FragmentationDiversityTracker(object):
         return self._years_to_sample
     years = property(_get_years_to_sample)
 
-    def _get_years_to_sample(self):
-        return self._years_to_sample
-    years = property(_get_years_to_sample)
-
     def _get_number_of_simulations(self):
         return self._number_of_simulations
     number_of_simulations = property(_get_number_of_simulations)
@@ -217,3 +230,33 @@ class FragmentationDiversityTracker(object):
     def _get_generation_time(self):
         return self._generation_time
     generation_time = property(_get_generation_time)
+
+    def _get_number_of_fragments(self):
+        return self._number_of_fragments
+
+    number_of_fragments = property(_get_number_of_fragments)
+
+    def _get_sample_size(self):
+        return self._sample_size
+
+    sample_size = property(_get_sample_size)
+
+    def _get_fragment_population_size(self):
+        return self._fragment_population_size
+
+    fragment_population_size = property(_get_fragment_population_size)
+
+    def _get_ancestral_population_size(self):
+        return self._ancestral_population_size
+
+    ancestral_population_size = property(_get_ancestral_population_size)
+
+    def _get_mutation_rate(self):
+        return self._mutation_rate
+
+    mutation_rate = property(_get_mutation_rate)
+
+    def _get_migration_rate(self):
+        return self._migration_rate
+
+    migration_rate = property(_get_migration_rate)
