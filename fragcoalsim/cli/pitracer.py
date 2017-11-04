@@ -33,6 +33,7 @@ def main(argv = sys.argv):
                     'sampled year. Default: 10000'))
     parser.add_argument('-y', '--years-to-sample',
             nargs = '?',
+            default = [0.0, 25.0, 50.0, 75.0, 100.0],
             type = fragcoalsim.argparse_utils.arg_is_nonnegative_float,
             help = ('Years to sample diversity following fragmentation.'))
     parser.add_argument('--ancestral-pop-sizes',
@@ -168,33 +169,32 @@ def main(argv = sys.argv):
         assert len(args.fragment_pop_sizes) == number_of_taxa, (
                 "The length of taxon-specific arguments must match")
 
-    sys.stdout.write("label\tmutation_rate\tgeneration_time\tancestral_pop_size\tfragment_pop_size\tmigration_rate\n")
+    sys.stdout.write("label\tyears\tmean_pi\te_frag_div\tmutation_rate\tgeneration_time\tancestral_pop_size\tfragment_pop_size\tmigration_rate\n")
+    tracers = []
     for i in range(number_of_taxa):
-        sys.stdout.write("{label}\t{mutation_rate}\t{generation_time}\t{ancestral_pop_size}\t{fragment_pop_size}\t{migration_rate}\n".format(
-                label = args.labels[i],
-                mutation_rate = args.mutation_rates[i],
+        pi_tracer = fragcoalsim.frag.FragmentationDiversityTracker(
+                seed = rng.randint(1, 999999999),
+                years_since_fragmentation_to_sample = args.years_to_sample,
                 generation_time = args.generation_times[i],
-                ancestral_pop_size = args.ancestral_pop_sizes[i],
-                fragment_pop_size = args.fragment_pop_sizes[i],
-                migration_rate = args.migration_rates[i]))
-
-
-
-
-    pi_tracer = fragcoalsim.frag.FragmentationDiversityTracker(
-            seed = rng.randint(1, 999999999),
-            years_since_fragmentation_to_sample = args.years_to_sample,
-            generation_time = 1.0,
-            number_of_simulations_per_sample = 10000,
-            number_of_fragments = 5,
-            number_of_genomes_per_fragment = 1,
-            sequence_length = 1000,
-            effective_pop_size_of_fragment = 100,
-            effective_pop_size_of_ancestor = 1000,
-            mutation_rate = 1e-8,
-            migration_rate = 0.0)
-
-    print(", ".join(str(x.mean) for x in pi_tracer.pi_samples))
+                number_of_simulations_per_sample = args.number_of_replicates,
+                number_of_fragments = args.number_of_fragments,
+                number_of_genomes_per_fragment = args.number_of_sampled_gene_copies,
+                effective_pop_size_of_fragment = args.fragment_pop_sizes[i],
+                effective_pop_size_of_ancestor = args.ancestral_pop_sizes[i],
+                mutation_rate = args.mutation_rates[i],
+                migration_rate = args.migration_rate[i])
+        tracers.append(pi_tracer)
+        for j, y in enumerate(pi_tracer.years):
+            sys.stdout.write("{label}\t{years}\t{mean_pi}\t{e_frag_div}\t{mutation_rate}\t{generation_time}\t{ancestral_pop_size}\t{fragment_pop_size}\t{migration_rate}\n".format(
+                    label = args.labels[i],
+                    years = y,
+                    mean_pi = pi_tracer.pi_samples[j],
+                    e_frag_div = pi_tracer.fragmentation_models[j].expected_divergence_between_fragments,
+                    mutation_rate = pi_tracer.mutation_rate,
+                    generation_time = pi_tracer.generation_time,
+                    ancestral_pop_size = pi_tracer.ancestral_population_size,
+                    fragment_pop_size = pi_tracer.fragment_population_size,
+                    migration_rate = pi_tracer.migration_rate))
 
     if args.no_plot:
         sys.exit(0)
