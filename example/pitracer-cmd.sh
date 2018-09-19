@@ -28,12 +28,12 @@
  
 pitracer --number-of-fragments 5 \
     --number-of-sampled-gene-copies 10 \
-    --number-of-replicates 100000 \
+    --number-of-replicates 50000 \
     --years-to-sample 0.0 20.0 40.0 60.0 80.0 100.0 \
     --labels Lemurs Lice Viruses \
-    --ancestral-pop-sizes 50000 200000 4000 \
-    --fragment-pop-sizes 1000 100000 4000 \
-    --mutation-rates 1e-8 2e-8 1e-5 \
+    --ancestral-pop-sizes 5000 200000 4000 \
+    --fragment-pop-sizes 100 100000 4000 \
+    --mutation-rates 1e-8 1e-7 1e-5 \
     --generation-times 4.0 0.08 0.011 \
     --migration-rates 0.0 0.0 0.0 \
     --seed 29478952 \
