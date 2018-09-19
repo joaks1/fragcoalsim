@@ -364,8 +364,8 @@ def main(argv = sys.argv):
     legend2 = plt.legend(
             line_types, 
             [
-                    "Mean diversity ($\\bar{{\\pi}}$)",
-                    "Expected divergence ($\\pi_F$)"
+                    "Overall ($\\pi$)",
+                    "Among fragments ($\\pi_F$)"
             ],
             # bbox_to_anchor = (0.0, 1.02, 1.0, 1.02),
             # loc = "lower left",
