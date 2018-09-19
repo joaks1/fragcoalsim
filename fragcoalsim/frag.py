@@ -22,6 +22,61 @@ def get_expected_divergence_between_fragments(
     expected_divergence = gens_diverging * mutation_rate
     return expected_divergence
 
+def get_expected_divergence_within_fragments(
+        generations_since_fragmentation = 10.0,
+        effective_pop_size_of_ancestor = 1000,
+        effective_pop_size_of_fragment = 100,
+        mutation_rate = 1e-8):
+
+    # Get expected diversity conditional on two gene copies coalescing within
+    # the fragment population
+    expected_coal_time_within_frag = 2.0 * effective_pop_size_of_fragment
+    expected_div_within_frag = 2.0 * expected_coal_time_within_frag * mutation_rate
+
+    # Get expected diversity conditional on two gene copies NOT coalescing
+    # within the fragment population
+    expected_div_between_frags = get_expected_divergence_between_fragments(
+            generations_since_fragmentation = generations_since_fragmentation,
+            effective_pop_size_of_ancestor = effective_pop_size_of_ancestor,
+            mutation_rate = mutation_rate)
+
+    # Now get average weighted by the probability of coal versus no coal within
+    # fragment
+    n2 = 2.0 * effective_pop_size_of_fragment
+    prob_of_no_coal_within_frag = ((n2 - 1) / n2) ** generations_since_fragmentation
+    prob_of_coal_withing_frag = 1.0 - prob_of_no_coal_within_frag
+
+    expected_div = ((prob_of_no_coal_within_frag * expected_div_between_frags) +
+            (prob_of_coal_withing_frag * expected_div_within_frag))
+
+    return expected_div
+
+def get_expected_divergence(
+        number_of_fragments = 5,
+        number_of_genomes_per_fragment = 1,
+        generations_since_fragmentation = 10.0,
+        effective_pop_size_of_ancestor = 1000,
+        effective_pop_size_of_fragment = 100,
+        mutation_rate = 1e-8):
+
+    n_comps_between_frags = float(number_of_genomes_per_fragment) ** number_of_fragments
+    n_comps_per_frag = (number_of_genomes_per_fragment * (number_of_genomes_per_fragment - 1.0)) / 2.0
+    n_comps_within_frags = n_comps_per_frag * number_of_fragments
+    n_comps = n_comps_between_frags + n_comps_within_frags
+
+    e_div_between = get_expected_divergence_between_fragments(
+            generations_since_fragmentation = generations_since_fragmentation,
+            effective_pop_size_of_ancestor = effective_pop_size_of_ancestor,
+            mutation_rate = mutation_rate)
+    e_div_within = get_expected_divergence_within_fragments(
+            generations_since_fragmentation = generations_since_fragmentation,
+            effective_pop_size_of_ancestor = effective_pop_size_of_ancestor,
+            effective_pop_size_of_fragment = effective_pop_size_of_fragment,
+            mutation_rate = mutation_rate)
+    e_div = (((n_comps_between_frags / n_comps) * e_div_between) +
+            ((n_comps_within_frags / n_comps) * e_div_within))
+    return e_div, e_div_between, e_div_within
+
 
 class FragmentationModel(object):
     def __init__(self,
@@ -45,10 +100,16 @@ class FragmentationModel(object):
         self._rng = random.Random()
         self._rng.seed(self._seed)
         
-        self._expected_div_between_fragments = get_expected_divergence_between_fragments(
+        div, div_b, div_w = get_expected_divergence(
+                number_of_fragments = self._number_of_fragments,
+                number_of_genomes_per_fragment = self._sample_size,
                 generations_since_fragmentation = self._generations_since_fragmentation,
                 effective_pop_size_of_ancestor = self._ancestral_population_size,
+                effective_pop_size_of_fragment = self._fragment_population_size,
                 mutation_rate = self._mutation_rate)
+        self._expected_div = div
+        self._expected_div_between_fragments = div_b
+        self._expected_div_within_fragments = div_w
 
         self._population_configs = []
         self._population_splits = []
@@ -99,13 +160,38 @@ class FragmentationModel(object):
                 random_seed = self._get_sim_seed(),
                 num_replicates = number_of_replicates)
 
+    def get_prob_of_no_coal_within_frag(self):
+        """
+        Get the probability that two gene copies sampled from the same fragment
+        fail to coalesce within the fragment:
+            = (1 - 1/2N)^t = ((2N - 1)/2N)^t
+        """
+        n2 = self.fragment_population_size * 2.0
+        return ((n2 - 1) / n2) ** self.generations_since_fragmentation
+
     def sample_pi(self, number_of_replicates):
         return (x.get_pairwise_diversity() for x in self.simulate(
                 number_of_replicates))
 
+    # def sample_pi_within(self, number_of_replicates):
+    #     divs = []
+    #     for sim in self.simulate(number_of_replicates):
+    #         pop = list(sim.populations())[0]
+    #         div = sim.get_pairwise_diversity(sim.samples(pop))
+    #         divs.append(div)
+    #     return divs
+
+    def _get_expected_div(self):
+        return self._expected_div
+    expected_divergence = property(_get_expected_div)
+
     def _get_expected_div_between_fragments(self):
         return self._expected_div_between_fragments
     expected_divergence_between_fragments = property(_get_expected_div_between_fragments)
+
+    def _get_expected_div_within_fragments(self):
+        return self._expected_div_within_fragments
+    expected_divergence_within_fragments = property(_get_expected_div_within_fragments)
 
     def _get_seed(self):
         return self._seed
