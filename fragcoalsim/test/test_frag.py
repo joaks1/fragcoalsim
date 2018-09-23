@@ -17,6 +17,24 @@ GLOBAL_RNG = random.Random()
 
 class FragmentationModelTestCase(unittest.TestCase):
 
+    def test_ms(self):
+        fm = frag.FragmentationModel(
+                seed = 123456,
+                number_of_fragments = 2,
+                number_of_genomes_per_fragment = 10,
+                generations_since_fragmentation = 1000,
+                effective_pop_size_of_fragment = 1000,
+                effective_pop_size_of_ancestor = 10000,
+                mutation_rate = 1e-6,
+                migration_rate = 0.0)
+        self.assertEqual(fm.number_of_fragments, 2)
+        pi, pi_a, pi_w = fm.ms_simulate(locus_length = 100, number_of_replicates = 10000)
+        print(sum(pi) / len(pi))
+        print(fm.expected_divergence)
+        p = list(fm.sample_pi(10000))
+        print(sum(p) / len(p))
+        self.assertEqual(len(pi), 10000)
+
     def test_expected_divergence_with_one_sample(self):
         gens_since_frag = 2000.0
         pop_size = 10000
