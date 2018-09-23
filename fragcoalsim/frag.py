@@ -4,6 +4,9 @@ import sys
 import os
 import logging
 import random
+import re
+import subprocess
+import itertools
 
 import msprime
 
@@ -65,6 +68,44 @@ def get_expected_divergence_within_fragments(
             effective_pop_size_of_fragment = effective_pop_size_of_fragment)
     return 2.0 * expected_coal_time * mutation_rate
 
+def get_expected_coal_time(
+        number_of_fragments = 5,
+        number_of_genomes_per_fragment = 1,
+        generations_since_fragmentation = 10.0,
+        effective_pop_size_of_ancestor = 1000,
+        effective_pop_size_of_fragment = 100):
+    if number_of_fragments < 2:
+        e_coal_between = None
+    else:
+        e_coal_between = get_expected_coal_time_between_fragments(
+                generations_since_fragmentation = generations_since_fragmentation,
+                effective_pop_size_of_ancestor = effective_pop_size_of_ancestor)
+    if number_of_genomes_per_fragment < 2:
+        e_coal_within = None
+    else:
+        e_coal_within = get_expected_coal_time_within_fragments(
+                generations_since_fragmentation = generations_since_fragmentation,
+                effective_pop_size_of_ancestor = effective_pop_size_of_ancestor,
+                effective_pop_size_of_fragment = effective_pop_size_of_fragment)
+
+    if (e_coal_between is None) and (e_coal_within is None):
+        return None, None, None
+    if e_coal_between is None:
+        return e_coal_within, e_coal_between, e_coal_within
+    if e_coal_within is None:
+        return e_coal_between, e_coal_between, e_coal_within
+
+    n_comps_per_frag = (number_of_genomes_per_fragment * (number_of_genomes_per_fragment - 1.0)) / 2.0
+    n_comps_within_frags = n_comps_per_frag * number_of_fragments
+    ngenomes = number_of_fragments * number_of_genomes_per_fragment
+    n_comps = (ngenomes * (ngenomes - 1)) / 2.0
+    p_within = n_comps_within_frags / n_comps
+    p_between = 1.0 - p_within
+
+    e_coal = ((p_between * e_coal_between) +
+            (p_within * e_coal_within))
+    return e_coal, e_coal_between, e_coal_within
+
 
 def get_expected_divergence(
         number_of_fragments = 5,
@@ -74,30 +115,21 @@ def get_expected_divergence(
         effective_pop_size_of_fragment = 100,
         mutation_rate = 1e-7):
 
-    e_div_between = get_expected_divergence_between_fragments(
+    m = 2.0 * mutation_rate
+    e_coal, e_coal_between, e_coal_within = get_expected_coal_time(
+            number_of_fragments = number_of_fragments,
+            number_of_genomes_per_fragment = number_of_genomes_per_fragment,
             generations_since_fragmentation = generations_since_fragmentation,
             effective_pop_size_of_ancestor = effective_pop_size_of_ancestor,
-            mutation_rate = mutation_rate)
-    if number_of_genomes_per_fragment == 1:
-        return e_div_between, e_div_between, float('nan')
-
-    e_div_within = get_expected_divergence_within_fragments(
-            generations_since_fragmentation = generations_since_fragmentation,
-            effective_pop_size_of_ancestor = effective_pop_size_of_ancestor,
-            effective_pop_size_of_fragment = effective_pop_size_of_fragment,
-            mutation_rate = mutation_rate)
-
-    n_comps_between_frags = float(number_of_genomes_per_fragment) ** number_of_fragments
-    n_comps_per_frag = (number_of_genomes_per_fragment * (number_of_genomes_per_fragment - 1.0)) / 2.0
-    n_comps_within_frags = n_comps_per_frag * number_of_fragments
-    n_comps = n_comps_between_frags + n_comps_within_frags
-
-    e_div = (((n_comps_between_frags / n_comps) * e_div_between) +
-            ((n_comps_within_frags / n_comps) * e_div_within))
-    return e_div, e_div_between, e_div_within
+            effective_pop_size_of_fragment = effective_pop_size_of_fragment)
+    return m * e_coal, m * e_coal_between, m * e_coal_within 
 
 
 class FragmentationModel(object):
+    ms_segsite_pattern = re.compile(r"^segsites:\s+(?P<segsites>\d+)\s*$")
+    ms_positions_pattern = re.compile(r"^positions:\s+(?P<positions>[0-9. ]+)$")
+    ms_char_pattern = re.compile(r"^(?P<characters>[01]+)$")
+
     def __init__(self,
             seed,
             number_of_fragments = 5,
@@ -178,6 +210,122 @@ class FragmentationModel(object):
                 demographic_events = self._population_splits + [self._fragmentation_size_change],
                 random_seed = self._get_sim_seed(),
                 num_replicates = number_of_replicates)
+
+    def get_ms_command(self, locus_length = 1000, number_of_replicates = 1):
+        current_theta = 4.0 * self.fragment_population_size * self.mutation_rate * locus_length
+        ancestral_theta =  4.0 * self.ancestral_population_size * self.mutation_rate * locus_length
+        time = self.generations_since_fragmentation / (2.0 * self.fragment_population_size)
+        ms_args = [
+                "ms",
+                str(self.sample_size * self.number_of_fragments),
+                str(number_of_replicates),
+                "-t",
+                str(current_theta),
+                "-I",
+                str(self.number_of_fragments),
+                ]
+        ms_args.extend(str(self.sample_size) for i in range(self.number_of_fragments))
+        ms_args.append("0.0")
+        for i in range(2, self.number_of_fragments + 1):
+            ms_args.extend(["-ej", str(time), str(i), "1"])
+        ms_args.extend(["-en", str(time), "1", str(ancestral_theta)])
+        ms_args.extend(["-seeds", str(self._get_sim_seed())])
+        return ms_args
+
+    def ms_simulate(self, locus_length = 1000, number_of_replicates = 1):
+        sout = subprocess.PIPE
+        serr = subprocess.PIPE
+        cmd = self.get_ms_command(
+                locus_length = locus_length,
+                number_of_replicates = number_of_replicates)
+        process = subprocess.Popen(
+                cmd,
+                stdout = sout,
+                stderr = serr,
+                shell = False)
+        pi, pi_a, pi_w = self.parse_ms_output(stream = process.stdout,
+                locus_length = locus_length)
+        # stdout, stderr = process.communicate()
+        exit_code = process.wait()
+        # print(stderr)
+        # print(stdout)
+        assert len(pi) == number_of_replicates
+        assert len(pi) == len(pi_a)
+        assert len(pi) == len(pi_w)
+        return pi, pi_a, pi_w
+
+    def parse_ms_output(self, stream, locus_length):
+        pi, pi_a, pi_w = [], [], []
+        for line in stream:
+            if line.strip() == "//":
+                p, a, w = self.process_ms_replicate_output(stream, locus_length)
+                pi.append(p)
+                pi_a.append(a)
+                pi_w.append(w)
+        return pi, pi_a, pi_w
+
+    def process_ms_replicate_output(self, stream, locus_length):
+        segsites_line = stream.next()
+        m = self.ms_segsite_pattern.match(segsites_line)
+        if not m:
+            raise Exception("Unexpected first line of ms replicate {0!r}".format(
+                    segsites_line.strip()))
+        num_seg_sites = int(m.group("segsites"))
+        if num_seg_sites < 1:
+            return 0.0, 0.0, 0.0
+        position_line = stream.next()
+        char_matrix = []
+        for pop_index in range(self.number_of_fragments):
+            for sample_index in range(self.sample_size):
+                char_line = stream.next()
+                char_match = self.ms_char_pattern.match(char_line)
+                if not char_match:
+                    raise Exception("Problem parsing ms character line {0!r}".format(
+                            char_line.strip()))
+                char_matrix.append((pop_index, char_line.strip()))
+        assert len(char_matrix) == self.sample_size * self.number_of_fragments
+        pi, pi_a, pi_w = self.calculate_pi_from_ms_characters(char_matrix,
+                locus_length)
+        return pi, pi_a, pi_w
+
+    def calculate_pi_from_ms_characters(self, character_matrix, locus_length):
+        num_comps = 0
+        num_comps_within = 0
+        num_comps_among = 0
+        sum_diffs = 0
+        sum_diffs_within = 0
+        sum_diffs_among = 0
+        for i, (c1, c2) in enumerate(itertools.combinations(character_matrix, 2)):
+            pop_index1, chars1 = c1
+            pop_index2, chars2 = c2
+            assert len(chars1) == len(chars2)
+            ndiffs = sum(1 for a, b in zip(chars1, chars2) if a != b)
+            sum_diffs += ndiffs
+            num_comps += 1
+            if pop_index1 == pop_index2:
+                sum_diffs_within += ndiffs
+                num_comps_within += 1
+            else:
+                sum_diffs_among += ndiffs
+                num_comps_among += 1
+        assert num_comps == i + 1
+        assert num_comps == (num_comps_within + num_comps_among)
+        pi = (sum_diffs / float(num_comps)) / float(locus_length)
+        if num_comps_within < 2:
+            pi_w = 0.0
+        else:
+            pi_w = (sum_diffs_within / float(num_comps_within)) / float(locus_length)
+        if num_comps_among < 2:
+            pi_a = 0.0
+        else:
+            pi_a = (sum_diffs_among / float(num_comps_among)) / float(locus_length)
+        return pi, pi_a, pi_w
+
+
+
+
+
+
 
     def get_prob_of_no_coal_within_frag(self):
         """
