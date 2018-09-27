@@ -19,21 +19,28 @@ class FragmentationModelTestCase(unittest.TestCase):
 
     def test_ms(self):
         fm = frag.FragmentationModel(
-                seed = 123456,
-                number_of_fragments = 2,
+                seed = 1234,
+                number_of_fragments = 5,
                 number_of_genomes_per_fragment = 10,
                 generations_since_fragmentation = 1000,
                 effective_pop_size_of_fragment = 1000,
                 effective_pop_size_of_ancestor = 10000,
                 mutation_rate = 1e-6,
                 migration_rate = 0.0)
-        self.assertEqual(fm.number_of_fragments, 2)
-        pi, pi_a, pi_w = fm.ms_simulate(locus_length = 100, number_of_replicates = 10000)
-        print(sum(pi) / len(pi))
+        pi, pi_a, pi_w = fm.ms_simulate(locus_length = 10, number_of_replicates = 10000)
+        mean_pi = sum(pi) / len(pi)
+        mean_pi_a = sum(pi_a) / len(pi_a)
+        mean_pi_w = sum(pi_w) / len(pi_w)
+        print("")
+        print(mean_pi)
         print(fm.expected_divergence)
-        p = list(fm.sample_pi(10000))
-        print(sum(p) / len(p))
-        self.assertEqual(len(pi), 10000)
+        print(mean_pi_a)
+        print(fm.expected_divergence_between_fragments)
+        print(mean_pi_w)
+        print(fm.expected_divergence_within_fragments)
+        self.assertAlmostEqual(fm.expected_divergence, mean_pi, places = 3)
+        self.assertAlmostEqual(fm.expected_divergence_between_fragments, mean_pi_a, places = 3)
+        self.assertAlmostEqual(fm.expected_divergence_within_fragments, mean_pi_w, places = 3)
 
     def test_expected_divergence_with_one_sample(self):
         gens_since_frag = 2000.0
@@ -56,58 +63,81 @@ class FragmentationModelTestCase(unittest.TestCase):
                 mutation_rate = mutation_rate,
                 migration_rate = 0.0)
         self.assertEqual(fm.number_of_fragments, 2)
-        pi_summary = stats.SampleSummarizer(
-                fm.sample_pi(200000))
+        # pi_summary = stats.SampleSummarizer(
+        #         fm.sample_pi(200000))
+        pi, pi_a, pi_w = fm.ms_simulate(locus_length = 1, number_of_replicates = 50000)
+        mean_pi = sum(pi) / len(pi)
+        mean_pi_a = sum(pi_a) / len(pi_a)
+        print("")
+        print(mean_pi)
         print(expected_div)
+        print(mean_pi_a)
         print(d_b)
-        print(d_w)
-        self.assertAlmostEqual(expected_div, pi_summary.mean, places = 3)
-        self.assertAlmostEqual(expected_div, d_b, places = 6)
-        self.assertIsTrue(d_w == float('nan'))
+        self.assertAlmostEqual(expected_div, mean_pi, places = 3)
+        self.assertAlmostEqual(expected_div, d_b, places = 3)
+        self.assertTrue(d_w is None)
 
     def test_expected_divergence_no_frag(self):
         fm = frag.FragmentationModel(
                 seed = 1111,
                 number_of_fragments = 2,
-                number_of_genomes_per_fragment = 10,
+                number_of_genomes_per_fragment = 5,
                 generations_since_fragmentation = 0,
                 effective_pop_size_of_fragment = 10000,
                 effective_pop_size_of_ancestor = 100000,
                 mutation_rate = 1e-6,
                 migration_rate = 0.0)
         self.assertEqual(fm.number_of_fragments, 2)
-        pi_summary = stats.SampleSummarizer(
-                fm.sample_pi(100000))
-        print(fm.expected_divergence_within_fragments)
-        print(fm.expected_divergence_between_fragments)
+        # pi_summary = stats.SampleSummarizer(
+        #         fm.sample_pi(100000))
+        pi, pi_a, pi_w = fm.ms_simulate(locus_length = 10, number_of_replicates = 50000)
+        mean_pi = sum(pi) / len(pi)
+        mean_pi_a = sum(pi_a) / len(pi_a)
+        mean_pi_w = sum(pi_w) / len(pi_w)
+        print("")
+        print(mean_pi)
         print(fm.expected_divergence)
-        print(pi_summary.mean)
+        print(mean_pi_a)
+        print(fm.expected_divergence_between_fragments)
+        print(mean_pi_w)
+        print(fm.expected_divergence_within_fragments)
         self.assertAlmostEqual(fm.expected_divergence, fm.expected_divergence_within_fragments, places = 6)
         self.assertAlmostEqual(fm.expected_divergence, fm.expected_divergence_between_fragments, places = 6)
-        self.assertAlmostEqual(fm.expected_divergence, pi_summary.mean, places = 3)
+        self.assertAlmostEqual(fm.expected_divergence, mean_pi, places = 2)
+        self.assertAlmostEqual(fm.expected_divergence_within_fragments, mean_pi_w, places = 2)
 
     def test_expected_divergence(self):
         fm = frag.FragmentationModel(
-                seed = 1111,
+                seed = 1111111,
                 number_of_fragments = 2,
-                number_of_genomes_per_fragment = 10,
+                number_of_genomes_per_fragment = 5,
                 generations_since_fragmentation = 10000,
-                effective_pop_size_of_fragment = 10000,
-                effective_pop_size_of_ancestor = 100000,
-                mutation_rate = 1e-6,
+                effective_pop_size_of_fragment = 100000,
+                effective_pop_size_of_ancestor = 1000,
+                mutation_rate = 1e-5,
                 migration_rate = 0.0)
         self.assertEqual(fm.number_of_fragments, 2)
-        pi_summary = stats.SampleSummarizer(
-                fm.sample_pi(100000))
-        print(fm.expected_divergence_within_fragments)
-        print(fm.expected_divergence_between_fragments)
+        # pi_summary = stats.SampleSummarizer(
+        #         fm.sample_pi(100000))
+        pi, pi_a, pi_w = fm.ms_simulate(locus_length = 1, number_of_replicates = 100000)
+        mean_pi = sum(pi) / len(pi)
+        mean_pi_a = sum(pi_a) / len(pi_a)
+        mean_pi_w = sum(pi_w) / len(pi_w)
+        print("")
+        print(mean_pi)
         print(fm.expected_divergence)
-        print(pi_summary.mean)
-        self.assertAlmostEqual(fm.expected_divergence, pi_summary.mean, places = 3)
+        print(mean_pi_a)
+        print(fm.expected_divergence_between_fragments)
+        print(mean_pi_w)
+        print(fm.expected_divergence_within_fragments)
+        self.assertAlmostEqual(fm.expected_divergence, mean_pi, places = 2)
+        self.assertAlmostEqual(fm.expected_divergence_between_fragments, mean_pi_a, places = 2)
+        # self.assertAlmostEqual(fm.expected_divergence_within_fragments, mean_pi_w, places = 2)
+        self.assertAlmostEqual(fm.expected_divergence_within_fragments, mean_pi_w, places = 1)
 
     def test_expected_divergence_within(self):
         fm = frag.FragmentationModel(
-                seed = 1111,
+                seed = 12345678,
                 number_of_fragments = 2,
                 number_of_genomes_per_fragment = 10,
                 generations_since_fragmentation = 10000,
@@ -116,11 +146,22 @@ class FragmentationModelTestCase(unittest.TestCase):
                 mutation_rate = 1e-6,
                 migration_rate = 0.0)
         self.assertEqual(fm.number_of_fragments, 2)
-        pi_summary = stats.SampleSummarizer(
-                fm.sample_pi_within(100000))
+        # pi_summary = stats.SampleSummarizer(
+        #         fm.sample_pi_within(100000))
+        pi, pi_a, pi_w = fm.ms_simulate(locus_length = 1, number_of_replicates = 100000)
+        mean_pi = sum(pi) / len(pi)
+        mean_pi_a = sum(pi_a) / len(pi_a)
+        mean_pi_w = sum(pi_w) / len(pi_w)
+        print("")
+        print(mean_pi)
+        print(fm.expected_divergence)
+        print(mean_pi_a)
+        print(fm.expected_divergence_between_fragments)
+        print(mean_pi_w)
         print(fm.expected_divergence_within_fragments)
-        print(pi_summary.mean)
-        self.assertAlmostEqual(fm.expected_divergence_within_fragments, pi_summary.mean, places = 3)
+        self.assertAlmostEqual(fm.expected_divergence, mean_pi, places = 2)
+        self.assertAlmostEqual(fm.expected_divergence_between_fragments, mean_pi_a, places = 2)
+        self.assertAlmostEqual(fm.expected_divergence_within_fragments, mean_pi_w, places = 2)
 
     def test_expected_divergence_between(self):
         gens_since_frag = 20000.0
@@ -131,7 +172,7 @@ class FragmentationModelTestCase(unittest.TestCase):
                 effective_pop_size_of_ancestor = pop_size,
                 mutation_rate = mutation_rate)
         fm = frag.FragmentationModel(
-                seed = 12345,
+                seed = 123456,
                 number_of_fragments = 2,
                 number_of_genomes_per_fragment = 1,
                 generations_since_fragmentation = gens_since_frag,
@@ -140,9 +181,13 @@ class FragmentationModelTestCase(unittest.TestCase):
                 mutation_rate = mutation_rate,
                 migration_rate = 0.0)
         self.assertEqual(fm.number_of_fragments, 2)
-        pi_summary = stats.SampleSummarizer(
-                fm.sample_pi(200000))
-        self.assertAlmostEqual(expected_div, pi_summary.mean, places = 3)
+        # pi_summary = stats.SampleSummarizer(
+        #         fm.sample_pi(200000))
+        pi, pi_a, pi_w = fm.ms_simulate(locus_length = 1, number_of_replicates = 200000)
+        mean_pi = sum(pi) / len(pi)
+        mean_pi_a = sum(pi_a) / len(pi_a)
+        self.assertAlmostEqual(expected_div, mean_pi_a, places = 3)
+        self.assertAlmostEqual(mean_pi, mean_pi_a, places = 3)
 
     def test_number_of_fragments(self):
         gens_since_frag = 20000.0
@@ -153,7 +198,7 @@ class FragmentationModelTestCase(unittest.TestCase):
                 effective_pop_size_of_ancestor = pop_size,
                 mutation_rate = mutation_rate)
         fm = frag.FragmentationModel(
-                seed = 12345,
+                seed = 12345678,
                 number_of_fragments = 10,
                 number_of_genomes_per_fragment = 1,
                 generations_since_fragmentation = gens_since_frag,
@@ -162,9 +207,13 @@ class FragmentationModelTestCase(unittest.TestCase):
                 mutation_rate = mutation_rate,
                 migration_rate = 0.0)
         self.assertEqual(fm.number_of_fragments, 10)
-        pi_summary = stats.SampleSummarizer(
-                fm.sample_pi(400000))
-        self.assertAlmostEqual(expected_div, pi_summary.mean, places = 3)
+        # pi_summary = stats.SampleSummarizer(
+        #         fm.sample_pi(400000))
+        pi, pi_a, pi_w = fm.ms_simulate(locus_length = 1, number_of_replicates = 400000)
+        mean_pi_a = sum(pi_a) / len(pi_a)
+        mean_pi = sum(pi) / len(pi)
+        self.assertAlmostEqual(expected_div, mean_pi_a, places = 3)
+        self.assertAlmostEqual(mean_pi, mean_pi_a, places = 3)
 
 if __name__ == '__main__':
     unittest.main()

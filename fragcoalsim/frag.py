@@ -2,6 +2,7 @@
 
 import sys
 import os
+import math
 import logging
 import random
 import re
@@ -38,7 +39,20 @@ def get_expected_coal_time_within_fragments(
         effective_pop_size_of_fragment = 100):
     # Get expected coalescence time of two gene copies conditional on them
     # coalescing within the fragment population
-    expected_coal_time_within_frag = 2.0 * effective_pop_size_of_fragment
+
+    # expected_coal_time_within_frag = 2.0 * effective_pop_size_of_fragment
+    # Above doesn't work, because coalescences that occur in ancestor skew this
+    # E.g., the expectation can be greater than time since fragmentation
+    # Instead, since the number of generations of the fragment branch is capped
+    # by the generations_since_fragmentation, we can take a weighted average
+    # over every generation within the fragment population (every generation is
+    # simply weighted by the probability of coalescence at that generation)
+    n2 = 2.0 * effective_pop_size_of_fragment
+    log_expected_coal_time_within_frag = 0.0
+    for g in range(1, int(round(generations_since_fragmentation)) + 1):
+        log_prob_coal = (math.log((n2 - 1.0) / n2) * (g - 1)) + math.log(1.0 / n2)
+        log_expected_coal_time_within_frag += g * log_prob_coal
+    expected_coal_time_within_frag = math.exp(log_expected_coal_time_within_frag)
 
     # Get expected coalescence time of two gene copies condition on them NOT
     # coalescing within the fragment population
@@ -48,8 +62,7 @@ def get_expected_coal_time_within_fragments(
 
     # Now average coal times weighted by the probability of coal versus no coal
     # within fragment
-    n2 = 2.0 * effective_pop_size_of_fragment
-    prob_of_no_coal_within_frag = ((n2 - 1) / n2) ** generations_since_fragmentation
+    prob_of_no_coal_within_frag = ((n2 - 1.0) / n2) ** generations_since_fragmentation
     prob_of_coal_within_frag = 1.0 - prob_of_no_coal_within_frag
 
     expected_coal = ((prob_of_no_coal_within_frag * expected_coal_time_between_frags) +
@@ -122,6 +135,12 @@ def get_expected_divergence(
             generations_since_fragmentation = generations_since_fragmentation,
             effective_pop_size_of_ancestor = effective_pop_size_of_ancestor,
             effective_pop_size_of_fragment = effective_pop_size_of_fragment)
+    if (e_coal_between is None) and (e_coal_within is None):
+        return None, None, None
+    if e_coal_between is None:
+        return m * e_coal_within, None, m * e_coal_within
+    if e_coal_within is None:
+        return m * e_coal_between, m * e_coal_between, None 
     return m * e_coal, m * e_coal_between, m * e_coal_within 
 
 
@@ -211,10 +230,11 @@ class FragmentationModel(object):
                 random_seed = self._get_sim_seed(),
                 num_replicates = number_of_replicates)
 
-    def get_ms_command(self, locus_length = 1000, number_of_replicates = 1):
+    def get_ms_command(self, locus_length = 1, number_of_replicates = 1):
         current_theta = 4.0 * self.fragment_population_size * self.mutation_rate * locus_length
-        ancestral_theta =  4.0 * self.ancestral_population_size * self.mutation_rate * locus_length
-        time = self.generations_since_fragmentation / (2.0 * self.fragment_population_size)
+        theta_change = self.ancestral_population_size / float(self.fragment_population_size)
+        time = self.generations_since_fragmentation / (4.0 * self.fragment_population_size)
+        migration = 4.0 * self.fragment_population_size * self.migration_rate
         ms_args = [
                 "ms",
                 str(self.sample_size * self.number_of_fragments),
@@ -225,24 +245,29 @@ class FragmentationModel(object):
                 str(self.number_of_fragments),
                 ]
         ms_args.extend(str(self.sample_size) for i in range(self.number_of_fragments))
-        ms_args.append("0.0")
+        ms_args.append(str(migration * (self.number_of_fragments - 1)))
         for i in range(2, self.number_of_fragments + 1):
             ms_args.extend(["-ej", str(time), str(i), "1"])
-        ms_args.extend(["-en", str(time), "1", str(ancestral_theta)])
+        ms_args.extend(["-en", str(time), "1", str(theta_change)])
+        ms_args.extend(["-eM", str(time), "0.0"])
         ms_args.extend(["-seeds", str(self._get_sim_seed())])
         return ms_args
 
-    def ms_simulate(self, locus_length = 1000, number_of_replicates = 1):
+    def ms_simulate(self, locus_length = 1, number_of_replicates = 1):
         sout = subprocess.PIPE
         serr = subprocess.PIPE
         cmd = self.get_ms_command(
                 locus_length = locus_length,
                 number_of_replicates = number_of_replicates)
-        process = subprocess.Popen(
-                cmd,
-                stdout = sout,
-                stderr = serr,
-                shell = False)
+        try:
+            process = subprocess.Popen(
+                    cmd,
+                    stdout = sout,
+                    stderr = serr,
+                    shell = False)
+        except OSError as e:
+            _LOG.error("Problem running ms executable")
+            raise e
         pi, pi_a, pi_w = self.parse_ms_output(stream = process.stdout,
                 locus_length = locus_length)
         # stdout, stderr = process.communicate()
@@ -311,21 +336,15 @@ class FragmentationModel(object):
         assert num_comps == i + 1
         assert num_comps == (num_comps_within + num_comps_among)
         pi = (sum_diffs / float(num_comps)) / float(locus_length)
-        if num_comps_within < 2:
+        if num_comps_within < 1:
             pi_w = 0.0
         else:
             pi_w = (sum_diffs_within / float(num_comps_within)) / float(locus_length)
-        if num_comps_among < 2:
+        if num_comps_among < 1:
             pi_a = 0.0
         else:
             pi_a = (sum_diffs_among / float(num_comps_among)) / float(locus_length)
         return pi, pi_a, pi_w
-
-
-
-
-
-
 
     def get_prob_of_no_coal_within_frag(self):
         """
