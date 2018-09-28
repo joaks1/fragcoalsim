@@ -7,11 +7,13 @@ import logging
 import random
 import re
 import subprocess
+import multiprocessing
 import itertools
+from contextlib import contextmanager
 
-import msprime
+# import msprime
 
-from fragcoalsim import stats
+from fragcoalsim import stats, check_external_tool
 
 _LOG = logging.getLogger(__name__)
 
@@ -144,6 +146,39 @@ def get_expected_divergence(
     return m * e_coal, m * e_coal_between, m * e_coal_within 
 
 
+@contextmanager
+def pool_context(*args, **kwargs):
+    pool = multiprocessing.Pool(*args, **kwargs)
+    yield pool
+    pool.terminate()
+
+def run_ms_simulations(frag_model, number_of_processes = None,
+        number_of_replicates = 50,
+        batch_size = 10,
+        locus_length = 1):
+    nbatches = int(math.ceil(number_of_replicates / float(batch_size)))
+    if number_of_processes is None:
+        number_of_processes = multiprocessing.cpu_count()
+    args = ((frag_model.get_random_copy(), locus_length, batch_size) for i in range(nbatches))
+    with pool_context(processes = number_of_processes) as pool:
+        results = pool.map(_ms_sim_unpack, args)
+    pi = []
+    pi_between = []
+    pi_within = []
+    for p, p_a, p_w in results:
+        pi.extend(p)
+        pi_between.extend(p_a)
+        pi_within.extend(p_w)
+    return pi, pi_between, pi_within
+
+def _ms_sim(frag_model, locus_length = 1, number_of_replicates = 1):
+    return frag_model.ms_simulate(locus_length = locus_length,
+            number_of_replicates = number_of_replicates)
+
+def _ms_sim_unpack(args):
+    return _ms_sim(*args)
+
+
 class FragmentationModel(object):
     ms_segsite_pattern = re.compile(r"^segsites:\s+(?P<segsites>\d+)\s*$")
     ms_positions_pattern = re.compile(r"^positions:\s+(?P<positions>[0-9. ]+)$")
@@ -181,54 +216,80 @@ class FragmentationModel(object):
         self._expected_div_between_fragments = div_b
         self._expected_div_within_fragments = div_w
 
-        self._population_configs = []
-        self._population_splits = []
-        self._fragmentation_size_change = None
-        self._migration_rate_matrix = []
+        # self._population_configs = []
+        # self._population_splits = []
+        # self._fragmentation_size_change = None
+        # self._migration_rate_matrix = []
 
-        for i in range(self._number_of_fragments):
-            self._population_configs.append(
-                    msprime.PopulationConfiguration(
-                        sample_size = self._sample_size,
-                        initial_size = self._fragment_population_size,
-                        growth_rate = 0.0))
-            if i > 0:
-                self._population_splits.append(
-                        msprime.MassMigration(
-                            time = self._generations_since_fragmentation,
-                            source = i,
-                            destination = 0,
-                            proportion = 1.0))
-        self._fragmentation_size_change = msprime.PopulationParametersChange(
-                time = self._generations_since_fragmentation,
-                initial_size = self._ancestral_population_size,
-                growth_rate = 0.0,
-                population_id = 0)
-        self._migration_rate_matrix = [
-                [0.0 for i in range(self._number_of_fragments)
-                        ] for j in range(self._number_of_fragments)
-                ]
-        for i in range(self._number_of_fragments):
-            for j in range(self._number_of_fragments):
-                if i != j:
-                    self._migration_rate_matrix[i][j] = self._migration_rate
+        # for i in range(self._number_of_fragments):
+        #     self._population_configs.append(
+        #             msprime.PopulationConfiguration(
+        #                 sample_size = self._sample_size,
+        #                 initial_size = self._fragment_population_size,
+        #                 growth_rate = 0.0))
+        #     if i > 0:
+        #         self._population_splits.append(
+        #                 msprime.MassMigration(
+        #                     time = self._generations_since_fragmentation,
+        #                     source = i,
+        #                     destination = 0,
+        #                     proportion = 1.0))
+        # self._fragmentation_size_change = msprime.PopulationParametersChange(
+        #         time = self._generations_since_fragmentation,
+        #         initial_size = self._ancestral_population_size,
+        #         growth_rate = 0.0,
+        #         population_id = 0)
+        # self._migration_rate_matrix = [
+        #         [0.0 for i in range(self._number_of_fragments)
+        #                 ] for j in range(self._number_of_fragments)
+        #         ]
+        # for i in range(self._number_of_fragments):
+        #     for j in range(self._number_of_fragments):
+        #         if i != j:
+        #             self._migration_rate_matrix[i][j] = self._migration_rate
+
+        self._ms_path = check_external_tool("ms")
 
 
     def _get_sim_seed(self):
         return self._rng.randint(1, 999999999)
 
-    def simulate(self, number_of_replicates):
-        return msprime.simulate(
-                sample_size = None, # will be determined from pop configs
-                Ne = 1.0, # reference effective pop size,
-                length = 1,
-                recombination_rate = 0.0,
+    def get_random_copy(self):
+        return FragmentationModel(
+                seed = self._get_sim_seed(),
+                number_of_fragments = self._number_of_fragments,
+                number_of_genomes_per_fragment = self._sample_size,
+                generations_since_fragmentation = self._generations_since_fragmentation,
+                effective_pop_size_of_fragment = self._fragment_population_size,
+                effective_pop_size_of_ancestor = self._ancestral_population_size,
                 mutation_rate = self._mutation_rate,
-                population_configurations = self._population_configs,
-                migration_matrix = self._migration_rate_matrix,
-                demographic_events = self._population_splits + [self._fragmentation_size_change],
-                random_seed = self._get_sim_seed(),
-                num_replicates = number_of_replicates)
+                migration_rate = self._migration_rate)
+
+    # def simulate(self, number_of_replicates):
+    #     return msprime.simulate(
+    #             sample_size = None, # will be determined from pop configs
+    #             Ne = 1.0, # reference effective pop size,
+    #             length = 1,
+    #             recombination_rate = 0.0,
+    #             mutation_rate = self._mutation_rate,
+    #             population_configurations = self._population_configs,
+    #             migration_matrix = self._migration_rate_matrix,
+    #             demographic_events = self._population_splits + [self._fragmentation_size_change],
+    #             random_seed = self._get_sim_seed(),
+    #             num_replicates = number_of_replicates)
+
+    # def sample_pi(self, number_of_replicates):
+    #     return (x.get_pairwise_diversity() for x in self.simulate(
+    #             number_of_replicates))
+
+    # def sample_pi_within(self, number_of_replicates):
+    #     divs = []
+    #     for sim in self.simulate(number_of_replicates):
+    #         for pop in sim.populations():
+    #             div = sim.get_pairwise_diversity(samples = sim.samples(pop.id))
+    #             divs.append(div)
+    #     return divs
+
 
     def get_ms_command(self, locus_length = 1, number_of_replicates = 1):
         current_theta = 4.0 * self.fragment_population_size * self.mutation_rate * locus_length
@@ -236,7 +297,7 @@ class FragmentationModel(object):
         time = self.generations_since_fragmentation / (4.0 * self.fragment_population_size)
         migration = 4.0 * self.fragment_population_size * self.migration_rate
         ms_args = [
-                "ms",
+                self._ms_path,
                 str(self.sample_size * self.number_of_fragments),
                 str(number_of_replicates),
                 "-t",
@@ -254,6 +315,11 @@ class FragmentationModel(object):
         return ms_args
 
     def ms_simulate(self, locus_length = 1, number_of_replicates = 1):
+        if not self._ms_path:
+            raise OSError(
+                    "The ms executable is not available for running simulations.\n"
+                    "Please install ms and try again. You can find ms here:\n"
+                    "http://home.uchicago.edu/rhudson1/source/mksamples.html")
         sout = subprocess.PIPE
         serr = subprocess.PIPE
         cmd = self.get_ms_command(
@@ -313,13 +379,13 @@ class FragmentationModel(object):
                 locus_length)
         return pi, pi_a, pi_w
 
-    def calculate_pi_from_ms_characters(self, character_matrix, locus_length):
+    def calculate_pi_from_ms_characters(cls, character_matrix, locus_length):
         num_comps = 0
         num_comps_within = 0
-        num_comps_among = 0
+        num_comps_between = 0
         sum_diffs = 0
         sum_diffs_within = 0
-        sum_diffs_among = 0
+        sum_diffs_between = 0
         for i, (c1, c2) in enumerate(itertools.combinations(character_matrix, 2)):
             pop_index1, chars1 = c1
             pop_index2, chars2 = c2
@@ -331,19 +397,19 @@ class FragmentationModel(object):
                 sum_diffs_within += ndiffs
                 num_comps_within += 1
             else:
-                sum_diffs_among += ndiffs
-                num_comps_among += 1
+                sum_diffs_between += ndiffs
+                num_comps_between += 1
         assert num_comps == i + 1
-        assert num_comps == (num_comps_within + num_comps_among)
+        assert num_comps == (num_comps_within + num_comps_between)
         pi = (sum_diffs / float(num_comps)) / float(locus_length)
         if num_comps_within < 1:
             pi_w = 0.0
         else:
             pi_w = (sum_diffs_within / float(num_comps_within)) / float(locus_length)
-        if num_comps_among < 1:
+        if num_comps_between < 1:
             pi_a = 0.0
         else:
-            pi_a = (sum_diffs_among / float(num_comps_among)) / float(locus_length)
+            pi_a = (sum_diffs_between / float(num_comps_between)) / float(locus_length)
         return pi, pi_a, pi_w
 
     def get_prob_of_no_coal_within_frag(self):
@@ -354,18 +420,6 @@ class FragmentationModel(object):
         """
         n2 = self.fragment_population_size * 2.0
         return ((n2 - 1) / n2) ** self.generations_since_fragmentation
-
-    def sample_pi(self, number_of_replicates):
-        return (x.get_pairwise_diversity() for x in self.simulate(
-                number_of_replicates))
-
-    def sample_pi_within(self, number_of_replicates):
-        divs = []
-        for sim in self.simulate(number_of_replicates):
-            for pop in sim.populations():
-                div = sim.get_pairwise_diversity(samples = sim.samples(pop.id))
-                divs.append(div)
-        return divs
 
     def _get_expected_div(self):
         return self._expected_div
@@ -445,19 +499,25 @@ class FragmentationDiversityTracker(object):
             years_since_fragmentation_to_sample = [
                     0.0, 10.0, 20.0, 30.0, 40.0, 50.0],
             generation_time = 1.0,
-            number_of_simulations_per_sample = 1000,
             number_of_fragments = 5,
             number_of_genomes_per_fragment = 1,
             effective_pop_size_of_fragment = 100,
             effective_pop_size_of_ancestor = 1000,
             mutation_rate = 1e-8,
-            migration_rate = 0.0):
+            migration_rate = 0.0,
+            number_of_simulations_per_sample = 1000,
+            number_of_processes = 2,
+            batch_size = 100,
+            locus_length = 1):
         self._seed = seed
         self._rng = random.Random()
         self._rng.seed(self._seed)
         self._years_to_sample = [float(y) for y in years_since_fragmentation_to_sample]
         self._generation_time = float(generation_time)
         self._number_of_simulations = number_of_simulations_per_sample
+        self._number_of_processes = number_of_processes
+        self._batch_size = batch_size
+        self._locus_length = locus_length
         assert len(self._years_to_sample) > 0
 
         self._number_of_fragments = number_of_fragments
@@ -469,6 +529,7 @@ class FragmentationDiversityTracker(object):
 
         self.fragmentation_models = []
         self.pi_samples = []
+        self.pi_between_samples = []
         for year in self._years_to_sample:
             frag_model = FragmentationModel(
                     seed = self._get_model_seed(),
@@ -480,9 +541,18 @@ class FragmentationDiversityTracker(object):
                     mutation_rate = self._mutation_rate,
                     migration_rate = self._migration_rate)
             self.fragmentation_models.append(frag_model)
-            pi_summary = stats.SampleSummarizer(
-                    frag_model.sample_pi(self._number_of_simulations))
+
+    def run_simulations(self):
+        for frag_model in self.fragmentation_models:
+            pi, pi_b, pi_a = run_ms_simulations(frag_model,
+                    number_of_processes = self._number_of_processes,
+                    number_of_replicates = self._number_of_simulations,
+                    batch_size = self._batch_size,
+                    locus_length = self._locus_length)
+            pi_summary = stats.SampleSummarizer(pi)
+            pi_b_summary = stats.SampleSummarizer(pi_b)
             self.pi_samples.append(pi_summary)
+            self.pi_between_samples.append(pi_b_summary)
 
     def _get_model_seed(self):
         return self._rng.randint(1, 999999999)

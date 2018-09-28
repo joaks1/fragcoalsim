@@ -8,6 +8,8 @@ import os
 import sys
 import random
 import argparse
+import multiprocessing
+import math
 
 import matplotlib as mpl
 
@@ -68,12 +70,6 @@ def main(argv = sys.argv):
             default = 1,
             type = fragcoalsim.argparse_utils.arg_is_positive_int,
             help = ('Number of sampled gene copies per fragment. Default: 1'))
-    parser.add_argument('-r', '--number-of-replicates',
-            action = 'store',
-            default = 10000,
-            type = fragcoalsim.argparse_utils.arg_is_positive_int,
-            help = ('Number of coalescent simulations to run per taxon and per '
-                    'sampled year. Default: 10000'))
     parser.add_argument('-y', '--years-to-sample',
             nargs = '+',
             default = [0.0, 25.0, 50.0, 75.0, 100.0],
@@ -110,10 +106,6 @@ def main(argv = sys.argv):
             default = [],
             type = str,
             help = ('Labels for each taxon.'))
-    parser.add_argument('--seed',
-            action = 'store',
-            type = fragcoalsim.argparse_utils.arg_is_positive_int,
-            help = ('Seed for random number generator.'))
     parser.add_argument('-p', '--prefix',
             action = 'store',
             type = str,
@@ -126,6 +118,25 @@ def main(argv = sys.argv):
     parser.add_argument('--no-plot',
             action = 'store_true',
             help = ('Skip plotting; only report summary table.'))
+    parser.add_argument('-r', '--number-of-replicates',
+            action = 'store',
+            default = 0,
+            type = fragcoalsim.argparse_utils.arg_is_nonnegative_int,
+            help = ('Number of coalescent simulations to run per taxon and per '
+                    'sampled year. Default: 0 (no simulations; only report '
+                    'expected diversity'))
+    parser.add_argument('--np',
+            action = 'store',
+            default = multiprocessing.cpu_count(),
+            type = fragcoalsim.argparse_utils.arg_is_positive_int,
+            help = ('Number of of processes to use during simulations. '
+                    'Default: One per available CPU. Only relevant if '
+                    'simulations are being run.'))
+    parser.add_argument('--seed',
+            action = 'store',
+            type = fragcoalsim.argparse_utils.arg_is_positive_int,
+            help = ('Seed for random number generator. Only relevant if '
+                    'simulations are being run.'))
 
     if argv == sys.argv:
         args = parser.parse_args()
@@ -136,6 +147,13 @@ def main(argv = sys.argv):
     if not args.seed:
         args.seed = random.randint(1, 999999999)
     rng.seed(args.seed)
+
+    batch_size = 1000
+    running_simulations = False
+    if args.number_of_replicates > 0:
+        running_simulations = True
+        if batch_size > int(math.ceil(float(args.number_of_replicates) / args.np)):
+            batch_size = int(math.ceil(float(args.number_of_replicates) / args.np))
 
     prefix = args.prefix
     if len(prefix.split(os.path.sep)) < 2:
@@ -204,40 +222,65 @@ def main(argv = sys.argv):
         assert len(args.fragment_pop_sizes) == number_of_taxa, (
                 "The length of taxon-specific arguments must match")
 
-    sys.stdout.write("label\tyears\tmean_pi\te_frag_div\tmutation_rate\tgeneration_time\tancestral_pop_size\tfragment_pop_size\tmigration_rate\tnfrags\tnsamples\n")
+    if running_simulations:
+        sys.stdout.write("label\tyears\te_pi\tmean_pi\te_pi_between\tmean_pi_between\tmutation_rate\tgeneration_time\tancestral_pop_size\tfragment_pop_size\tmigration_rate\tnfrags\tnsamples\n")
+    else:
+        sys.stdout.write("label\tyears\te_pi\te_pi_between\tmutation_rate\tgeneration_time\tancestral_pop_size\tfragment_pop_size\tmigration_rate\tnfrags\tnsamples\n")
     tracers = []
     for i in range(number_of_taxa):
         pi_tracer = fragcoalsim.frag.FragmentationDiversityTracker(
                 seed = rng.randint(1, 999999999),
                 years_since_fragmentation_to_sample = args.years_to_sample,
                 generation_time = args.generation_times[i],
-                number_of_simulations_per_sample = args.number_of_replicates,
                 number_of_fragments = args.number_of_fragments,
                 number_of_genomes_per_fragment = args.number_of_sampled_gene_copies,
                 effective_pop_size_of_fragment = args.fragment_pop_sizes[i],
                 effective_pop_size_of_ancestor = args.ancestral_pop_sizes[i],
                 mutation_rate = args.mutation_rates[i],
-                migration_rate = args.migration_rates[i])
+                migration_rate = args.migration_rates[i],
+                number_of_simulations_per_sample = args.number_of_replicates,
+                number_of_processes = args.np,
+                batch_size = batch_size,
+                locus_length = 1)
+        if running_simulations:
+            pi_tracer.run_simulations()
         tracers.append(pi_tracer)
         for j, y in enumerate(pi_tracer.years):
-            sys.stdout.write("{label}\t{years}\t{mean_pi}\t{e_frag_div}\t{mutation_rate}\t{generation_time}\t{ancestral_pop_size}\t{fragment_pop_size}\t{migration_rate}\t{nfrags}\t{nsamples}\n".format(
-                    label = args.labels[i],
-                    years = y,
-                    mean_pi = pi_tracer.pi_samples[j].mean,
-                    e_frag_div = pi_tracer.fragmentation_models[j].expected_divergence_between_fragments,
-                    mutation_rate = pi_tracer.mutation_rate,
-                    generation_time = pi_tracer.generation_time,
-                    ancestral_pop_size = pi_tracer.ancestral_population_size,
-                    fragment_pop_size = pi_tracer.fragment_population_size,
-                    migration_rate = pi_tracer.migration_rate,
-                    nfrags = pi_tracer.number_of_fragments,
-                    nsamples = pi_tracer.sample_size,
-                    ))
+            if running_simulations:
+                sys.stdout.write("{label}\t{years}\t{e_pi}\t{mean_pi}\t{e_pi_between}\t{mean_pi_between}\t{mutation_rate}\t{generation_time}\t{ancestral_pop_size}\t{fragment_pop_size}\t{migration_rate}\t{nfrags}\t{nsamples}\n".format(
+                        label = args.labels[i],
+                        years = y,
+                        e_pi = pi_tracer.fragmentation_models[j].expected_divergence,
+                        mean_pi = pi_tracer.pi_samples[j].mean,
+                        e_pi_between = pi_tracer.fragmentation_models[j].expected_divergence_between_fragments,
+                        mean_pi_between = pi_tracer.pi_between_samples[j].mean,
+                        mutation_rate = pi_tracer.mutation_rate,
+                        generation_time = pi_tracer.generation_time,
+                        ancestral_pop_size = pi_tracer.ancestral_population_size,
+                        fragment_pop_size = pi_tracer.fragment_population_size,
+                        migration_rate = pi_tracer.migration_rate,
+                        nfrags = pi_tracer.number_of_fragments,
+                        nsamples = pi_tracer.sample_size,
+                        ))
+            else:
+                sys.stdout.write("{label}\t{years}\t{e_pi}\t{e_pi_between}\t{mutation_rate}\t{generation_time}\t{ancestral_pop_size}\t{fragment_pop_size}\t{migration_rate}\t{nfrags}\t{nsamples}\n".format(
+                        label = args.labels[i],
+                        years = y,
+                        e_pi = pi_tracer.fragmentation_models[j].expected_divergence,
+                        e_pi_between = pi_tracer.fragmentation_models[j].expected_divergence_between_fragments,
+                        mutation_rate = pi_tracer.mutation_rate,
+                        generation_time = pi_tracer.generation_time,
+                        ancestral_pop_size = pi_tracer.ancestral_population_size,
+                        fragment_pop_size = pi_tracer.fragment_population_size,
+                        migration_rate = pi_tracer.migration_rate,
+                        nfrags = pi_tracer.number_of_fragments,
+                        nsamples = pi_tracer.sample_size,
+                        ))
 
     if args.no_plot:
         sys.exit(0)
 
-    # Expected divergenc plot
+    # Expected divergence plot
     plt.close('all')
     fig = plt.figure(figsize = (4, 3))
     gs = gridspec.GridSpec(1, 1,
@@ -251,75 +294,8 @@ def main(argv = sys.argv):
             line_color = palette[-1]
         line, = ax.plot(
                 pi_tracer.years,
-                [m.expected_divergence_between_fragments for m in pi_tracer.fragmentation_models],
-                label = args.labels[i]
-                )
-        plt.setp(line,
-                linestyle = '-',
-                linewidth = 2,
-                color = line_color,
-                rasterized = False)
-    xlabel_text = ax.set_xlabel("Years since fragmentation")
-    ylabel_text = ax.set_ylabel("Expected diversity among fragments")
-    plot_legend = ax.legend(
-            loc = 'best',
-            ncol = 1,
-            edgecolor = 'none')
-    gs.update(left = 0.14, right = 0.995, bottom = 0.14, top = 0.995)
-    plt.savefig(expected_div_path)
-
-    # Simulation plot
-    plt.close('all')
-    fig = plt.figure(figsize = (4, 3))
-    gs = gridspec.GridSpec(1, 1,
-            wspace = 0.0,
-            hspace = 0.0)
-    ax = plt.subplot(gs[0, 0])
-    for i, pi_tracer in enumerate(tracers):
-        if i < len(palette):
-            line_color = palette[i]
-        else:
-            line_color = palette[-1]
-        line, = ax.plot(
-                pi_tracer.years,
-                [s.mean for s in pi_tracer.pi_samples],
-                label = args.labels[i],
-                )
-        plt.setp(line,
-                marker = 'o',
-                markerfacecolor = line_color,
-                markeredgecolor = line_color,
-                markersize = 3.5,
-                linestyle = '-',
-                linewidth = 2,
-                color = line_color,
-                zorder = 200,
-                rasterized = False)
-    xlabel_text = ax.set_xlabel("Years since fragmentation")
-    ylabel_text = ax.set_ylabel("Diversity")
-    plot_legend = ax.legend(
-            loc = 'best',
-            ncol = 1,
-            edgecolor = "none")
-    gs.update(left = 0.14, right = 0.995, bottom = 0.14, top = 0.995)
-    plt.savefig(sim_div_path)
-
-    # Overlay plot
-    plt.close('all')
-    fig = plt.figure(figsize = (4, 3))
-    gs = gridspec.GridSpec(1, 1,
-            wspace = 0.0,
-            hspace = 0.0)
-    ax = plt.subplot(gs[0, 0])
-    for i, pi_tracer in enumerate(tracers):
-        if i < len(palette):
-            line_color = palette[i]
-        else:
-            line_color = palette[-1]
-        line, = ax.plot(
-                pi_tracer.years,
-                [s.mean for s in pi_tracer.pi_samples],
-                label = "{0} mean $\\pi$".format(args.labels[i]),
+                [m.expected_divergence for m in pi_tracer.fragmentation_models],
+                label = "{0} expected $\\pi$".format(args.labels[i]),
                 )
         plt.setp(line,
                 marker = 'o',
@@ -367,17 +343,84 @@ def main(argv = sys.argv):
                     "Overall ($\\pi$)",
                     "Among fragments ($\\pi_F$)"
             ],
-            # bbox_to_anchor = (0.0, 1.02, 1.0, 1.02),
-            # loc = "lower left",
-            # ncol = 2,
-            # mode = "expand",
-            # borderaxespad = 0.0,
             loc = "upper left",
             edgecolor = "none",
             )
     ax.add_artist(legend1)
     gs.update(left = 0.14, right = 0.995, bottom = 0.14, top = 0.995)
-    plt.savefig(overlay_path)
+    plt.savefig(expected_div_path)
+
+    if running_simulations:
+        # Simulation plot
+        plt.close('all')
+        fig = plt.figure(figsize = (4, 3))
+        gs = gridspec.GridSpec(1, 1,
+                wspace = 0.0,
+                hspace = 0.0)
+        ax = plt.subplot(gs[0, 0])
+        for i, pi_tracer in enumerate(tracers):
+            if i < len(palette):
+                line_color = palette[i]
+            else:
+                line_color = palette[-1]
+            line, = ax.plot(
+                    pi_tracer.years,
+                    [s.mean for s in pi_tracer.pi_samples],
+                    label = "{0} mean $\\pi$".format(args.labels[i]),
+                    )
+            plt.setp(line,
+                    marker = 'o',
+                    markerfacecolor = line_color,
+                    markeredgecolor = line_color,
+                    markersize = 3.5,
+                    linestyle = '--',
+                    linewidth = 2,
+                    color = line_color,
+                    zorder = 200,
+                    rasterized = False)
+            line, = ax.plot(
+                    pi_tracer.years,
+                    [s.mean for s in pi_tracer.pi_between_samples],
+                    label = "{0} mean $\\pi_F$".format(args.labels[i]),
+                    )
+            plt.setp(line,
+                    linestyle = '-',
+                    linewidth = 2,
+                    color = line_color,
+                    alpha = 0.5,
+                    zorder = 100,
+                    rasterized = False)
+        xlabel_text = ax.set_xlabel("Years since fragmentation")
+        ylabel_text = ax.set_ylabel("Diversity")
+        line_types = []
+        line_colors = []
+        for ls in ['--', '-']:
+            line_types.append(ax.plot([],[], color = "black", ls = ls)[0])
+        for i in range(number_of_taxa):
+            line_colors.append(ax.plot([],[], color = palette[i], ls = '-')[0])
+        lines = ax.get_lines()
+        legend1 = plt.legend(
+                line_colors,
+                args.labels,
+                loc = "center right",
+                ncol = 1,
+                edgecolor = "none",
+                )
+        plt.legend(bbox_to_anchor=(0.0, 1.02, 1.0, 1.02), loc=3,
+           ncol=2, mode="expand", borderaxespad=0.)
+        legend2 = plt.legend(
+                line_types, 
+                [
+                        "Overall ($\\pi$)",
+                        "Among fragments ($\\pi_F$)"
+                ],
+                loc = "upper left",
+                edgecolor = "none",
+                )
+        ax.add_artist(legend1)
+        gs.update(left = 0.14, right = 0.995, bottom = 0.14, top = 0.995)
+        plt.savefig(sim_div_path)
+
 
 if __name__ == "__main__":
     main()

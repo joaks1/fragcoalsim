@@ -26,6 +26,24 @@ __license_short__ = "GNU General Public License Version 3"
 PACKAGE_DIR = os.path.abspath(__file__)
 BASE_DIR = os.path.dirname(PACKAGE_DIR)
 
+def check_external_tool(exe_path):
+    """
+    Uses `subprocess.Popen` to check system for `exe_path`. If found,
+    `exe_file` is returned, else `None` is returned.
+
+    """
+    import subprocess
+    try:
+        p = subprocess.Popen([exe_path],
+                stdout = subprocess.PIPE,
+                stderr = subprocess.PIPE)
+        p.terminate()
+    except subprocess.CalledProcessError:
+        return exe_path
+    except OSError:
+        return None
+    return exe_path
+
 # NOTE: Imports to populate the namespace can break the scripts' control of the
 # logging level, because imported modules will initiate their loggers before
 # the CLI scripts can update LoggingControl.
