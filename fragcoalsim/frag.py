@@ -10,6 +10,7 @@ import subprocess
 import multiprocessing
 import itertools
 from contextlib import contextmanager
+import json
 
 # import msprime
 
@@ -152,7 +153,7 @@ def pool_context(*args, **kwargs):
     yield pool
     pool.terminate()
 
-def run_ms_simulations(frag_model, number_of_processes = None,
+def run_mspi_simulations(frag_model, number_of_processes = None,
         number_of_replicates = 50,
         batch_size = 10,
         locus_length = 1):
@@ -161,7 +162,7 @@ def run_ms_simulations(frag_model, number_of_processes = None,
         number_of_processes = multiprocessing.cpu_count()
     args = ((frag_model.get_random_copy(), locus_length, batch_size) for i in range(nbatches))
     with pool_context(processes = number_of_processes) as pool:
-        results = pool.map(_ms_sim_unpack, args)
+        results = pool.map(_mspi_sim_unpack, args)
     pi = []
     pi_between = []
     pi_within = []
@@ -171,12 +172,12 @@ def run_ms_simulations(frag_model, number_of_processes = None,
         pi_within.extend(p_w)
     return pi, pi_between, pi_within
 
-def _ms_sim(frag_model, locus_length = 1, number_of_replicates = 1):
-    return frag_model.ms_simulate(locus_length = locus_length,
+def _mspi_sim(frag_model, locus_length = 1, number_of_replicates = 1):
+    return frag_model.mspi_simulate(locus_length = locus_length,
             number_of_replicates = number_of_replicates)
 
-def _ms_sim_unpack(args):
-    return _ms_sim(*args)
+def _mspi_sim_unpack(args):
+    return _mspi_sim(*args)
 
 
 class FragmentationModel(object):
@@ -249,6 +250,7 @@ class FragmentationModel(object):
         #             self._migration_rate_matrix[i][j] = self._migration_rate
 
         self._ms_path = check_external_tool("ms")
+        self._mspi_path = check_external_tool("mspi")
 
 
     def _get_sim_seed(self):
@@ -314,6 +316,42 @@ class FragmentationModel(object):
         ms_args.extend(["-seeds", str(self._get_sim_seed())])
         return ms_args
 
+    def mspi_simulate(self, locus_length = 1, number_of_replicates = 1):
+        if not self._mspi_path:
+            raise OSError(
+                    "The mspi executable is not available for running simulations.\n"
+                    "Please install mspi and try again.")
+        sout = subprocess.PIPE
+        serr = subprocess.PIPE
+        cmd = self.get_ms_command(
+                locus_length = locus_length,
+                number_of_replicates = number_of_replicates)
+        cmd[0] = self._mspi_path
+        try:
+            process = subprocess.Popen(
+                    cmd,
+                    stdout = sout,
+                    stderr = serr,
+                    shell = False)
+        except OSError as e:
+            _LOG.error("Problem running ms executable")
+            raise e
+        pi, pi_b, pi_w = self.parse_mspi_output(stream = process.stdout,
+                locus_length = locus_length)
+        exit_code = process.wait()
+        assert len(pi) == number_of_replicates
+        assert len(pi) == len(pi_b)
+        assert len(pi) == len(pi_w)
+        return pi, pi_b, pi_w
+
+    def parse_mspi_output(self, stream, locus_length):
+        results = json.loads("".join(stream.readlines()[2:]))
+        pi = [x / float(locus_length) for x in results["pi"]]
+        pi_b = [x / float(locus_length) for x in results["pi_b"]]
+        pi_w = [x / float(locus_length) for x in results["pi_w"]]
+        return pi, pi_b, pi_w
+
+
     def ms_simulate(self, locus_length = 1, number_of_replicates = 1):
         if not self._ms_path:
             raise OSError(
@@ -334,26 +372,26 @@ class FragmentationModel(object):
         except OSError as e:
             _LOG.error("Problem running ms executable")
             raise e
-        pi, pi_a, pi_w = self.parse_ms_output(stream = process.stdout,
+        pi, pi_b, pi_w = self.parse_ms_output(stream = process.stdout,
                 locus_length = locus_length)
         # stdout, stderr = process.communicate()
         exit_code = process.wait()
         # print(stderr)
         # print(stdout)
         assert len(pi) == number_of_replicates
-        assert len(pi) == len(pi_a)
+        assert len(pi) == len(pi_b)
         assert len(pi) == len(pi_w)
-        return pi, pi_a, pi_w
+        return pi, pi_b, pi_w
 
     def parse_ms_output(self, stream, locus_length):
-        pi, pi_a, pi_w = [], [], []
+        pi, pi_b, pi_w = [], [], []
         for line in stream:
             if line.strip() == "//":
-                p, a, w = self.process_ms_replicate_output(stream, locus_length)
+                p, b, w = self.process_ms_replicate_output(stream, locus_length)
                 pi.append(p)
-                pi_a.append(a)
+                pi_b.append(b)
                 pi_w.append(w)
-        return pi, pi_a, pi_w
+        return pi, pi_b, pi_w
 
     def process_ms_replicate_output(self, stream, locus_length):
         segsites_line = stream.next()
@@ -375,9 +413,9 @@ class FragmentationModel(object):
                             char_line.strip()))
                 char_matrix.append((pop_index, char_line.strip()))
         assert len(char_matrix) == self.sample_size * self.number_of_fragments
-        pi, pi_a, pi_w = self.calculate_pi_from_ms_characters(char_matrix,
+        pi, pi_b, pi_w = self.calculate_pi_from_ms_characters(char_matrix,
                 locus_length)
-        return pi, pi_a, pi_w
+        return pi, pi_b, pi_w
 
     def calculate_pi_from_ms_characters(cls, character_matrix, locus_length):
         num_comps = 0
@@ -407,10 +445,10 @@ class FragmentationModel(object):
         else:
             pi_w = (sum_diffs_within / float(num_comps_within)) / float(locus_length)
         if num_comps_between < 1:
-            pi_a = 0.0
+            pi_b = 0.0
         else:
-            pi_a = (sum_diffs_between / float(num_comps_between)) / float(locus_length)
-        return pi, pi_a, pi_w
+            pi_b = (sum_diffs_between / float(num_comps_between)) / float(locus_length)
+        return pi, pi_b, pi_w
 
     def get_prob_of_no_coal_within_frag(self):
         """
@@ -544,7 +582,7 @@ class FragmentationDiversityTracker(object):
 
     def run_simulations(self):
         for frag_model in self.fragmentation_models:
-            pi, pi_b, pi_a = run_ms_simulations(frag_model,
+            pi, pi_b, pi_w = run_mspi_simulations(frag_model,
                     number_of_processes = self._number_of_processes,
                     number_of_replicates = self._number_of_simulations,
                     batch_size = self._batch_size,
