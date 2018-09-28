@@ -49,9 +49,9 @@ def get_expected_coal_time_within_fragments(
     # simply weighted by the probability of coalescence at that generation)
     n2 = 2.0 * effective_pop_size_of_fragment
     log_expected_coal_time_within_frag = 0.0
-    for g in range(1, int(round(generations_since_fragmentation)) + 1):
-        log_prob_coal = (math.log((n2 - 1.0) / n2) * (g - 1)) + math.log(1.0 / n2)
-        log_expected_coal_time_within_frag += g * log_prob_coal
+    for gen in range(1, int(round(generations_since_fragmentation)) + 1):
+        log_prob_coal = (math.log((n2 - 1.0) / n2) * (gen - 1)) + math.log(1.0 / n2)
+        log_expected_coal_time_within_frag += gen * log_prob_coal
     expected_coal_time_within_frag = math.exp(log_expected_coal_time_within_frag)
 
     # Get expected coalescence time of two gene copies condition on them NOT
