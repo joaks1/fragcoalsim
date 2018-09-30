@@ -15,6 +15,7 @@ import json
 # import msprime
 
 from fragcoalsim import stats, check_external_tool
+from fragcoalsim import mspi
 
 _LOG = logging.getLogger(__name__)
 
@@ -317,6 +318,16 @@ class FragmentationModel(object):
         return ms_args
 
     def mspi_simulate(self, locus_length = 1, number_of_replicates = 1):
+        cmd = self.get_ms_command(
+                locus_length = locus_length,
+                number_of_replicates = number_of_replicates)
+        pi, pi_b, pi_w = mspi.mspi_run_sims(cmd, locus_length)
+        assert len(pi) == number_of_replicates
+        assert len(pi) == len(pi_b)
+        assert len(pi) == len(pi_w)
+        return pi, pi_b, pi_w
+
+    def mspi_simulate_subprocess(self, locus_length = 1, number_of_replicates = 1):
         if not self._mspi_path:
             raise OSError(
                     "The mspi executable is not available for running simulations.\n"

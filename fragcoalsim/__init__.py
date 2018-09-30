@@ -50,7 +50,7 @@ def check_external_tool(exe_path):
 
 import fragcoalsim.stats
 import fragcoalsim.argparse_utils
-import fragcoalsim.frag
+# import fragcoalsim.frag
 
 def _get_git_data(repo_path):
     try:
