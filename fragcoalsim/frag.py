@@ -44,19 +44,21 @@ def get_expected_coal_time_within_fragments(
     # Get expected coalescence time of two gene copies conditional on them
     # coalescing within the fragment population
 
-    # expected_coal_time_within_frag = 2.0 * effective_pop_size_of_fragment
+    n2 = 2.0 * effective_pop_size_of_fragment
+    expected_coal_time_within_frag = n2
+    weight_within = True
     # Above doesn't work, because coalescences that occur in ancestor skew this
     # E.g., the expectation can be greater than time since fragmentation
     # Instead, since the number of generations of the fragment branch is capped
     # by the generations_since_fragmentation, we can take a weighted average
     # over every generation within the fragment population (every generation is
     # simply weighted by the probability of coalescence at that generation)
-    n2 = 2.0 * effective_pop_size_of_fragment
-    log_expected_coal_time_within_frag = 0.0
-    for gen in range(1, int(round(generations_since_fragmentation)) + 1):
-        log_prob_coal = (math.log((n2 - 1.0) / n2) * (gen - 1)) + math.log(1.0 / n2)
-        log_expected_coal_time_within_frag += gen * log_prob_coal
-    expected_coal_time_within_frag = math.exp(log_expected_coal_time_within_frag)
+    if (10 * expected_coal_time_within_frag) > generations_since_fragmentation:
+        weight_within = False
+        expected_coal_time_within_frag = 0.0
+        for gen in range(1, int(round(generations_since_fragmentation)) + 1):
+            log_prob_coal = (math.log((n2 - 1.0) / n2) * (gen - 1)) + math.log(1.0 / n2)
+            expected_coal_time_within_frag += math.exp(log_prob_coal + math.log(gen))
 
     # Get expected coalescence time of two gene copies condition on them NOT
     # coalescing within the fragment population
@@ -69,8 +71,11 @@ def get_expected_coal_time_within_fragments(
     prob_of_no_coal_within_frag = ((n2 - 1.0) / n2) ** generations_since_fragmentation
     prob_of_coal_within_frag = 1.0 - prob_of_no_coal_within_frag
 
+    within_wt = 1.0
+    if weight_within:
+        within_wt = prob_of_coal_within_frag
     expected_coal = ((prob_of_no_coal_within_frag * expected_coal_time_between_frags) +
-            (prob_of_coal_within_frag * expected_coal_time_within_frag))
+            (within_wt * expected_coal_time_within_frag))
 
     return expected_coal
 

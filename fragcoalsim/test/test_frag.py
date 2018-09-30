@@ -17,6 +17,39 @@ GLOBAL_RNG = random.Random()
 
 class FragmentationModelTestCase(unittest.TestCase):
 
+    def test_virus(self):
+        nreps = 20000
+        fm = frag.FragmentationModel(
+                seed = 123456,
+                number_of_fragments = 2,
+                number_of_genomes_per_fragment = 10,
+                generations_since_fragmentation = 20000,
+                effective_pop_size_of_fragment = 5000,
+                effective_pop_size_of_ancestor = 5000,
+                mutation_rate = 1e-5,
+                migration_rate = 0.0)
+        pi, pi_a, pi_w = frag.run_mspi_simulations(fm,
+                number_of_processes = None,
+                number_of_replicates = nreps,
+                batch_size = 1000,
+                locus_length = 1)
+        self.assertEqual(len(pi), nreps)
+        self.assertEqual(len(pi_a), nreps)
+        self.assertEqual(len(pi_w), nreps)
+        mean_pi = sum(pi) / len(pi)
+        mean_pi_a = sum(pi_a) / len(pi_a)
+        mean_pi_w = sum(pi_w) / len(pi_w)
+        print("")
+        print(mean_pi)
+        print(fm.expected_divergence)
+        print(mean_pi_a)
+        print(fm.expected_divergence_between_fragments)
+        print(mean_pi_w)
+        print(fm.expected_divergence_within_fragments)
+        self.assertAlmostEqual(fm.expected_divergence, mean_pi, places = 2)
+        self.assertAlmostEqual(fm.expected_divergence_between_fragments, mean_pi_a, places = 2)
+        self.assertAlmostEqual(fm.expected_divergence_within_fragments, mean_pi_w, places = 2)
+
     def test_mspi(self):
         fm = frag.FragmentationModel(
                 seed = 123456,
