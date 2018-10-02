@@ -1,11 +1,16 @@
 #! /usr/bin/env python
 
 import os
+import glob
 import ctypes
 
-_mspi_path = os.path.join(
+_mspi_path_list = glob.glob(os.path.join(
         os.path.abspath(os.path.dirname(__file__)),
-        "mspi",  "mspi.so")
+        "libmspi",
+        "libmspi*.so"))
+if not _mspi_path_list:
+    raise Exception("Could not find bundled libmspi shared library")
+_mspi_path = _mspi_path_list[0]
 _mspi = ctypes.CDLL(_mspi_path)
 _ptr_c_char = ctypes.POINTER(ctypes.c_char)
 _ptr_c_double = ctypes.POINTER(ctypes.c_double)

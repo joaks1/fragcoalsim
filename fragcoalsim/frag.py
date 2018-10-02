@@ -161,12 +161,11 @@ def pool_context(*args, **kwargs):
 
 def run_mspi_simulations(frag_model, number_of_processes = None,
         number_of_replicates = 50,
-        batch_size = 10,
         locus_length = 1):
-    nbatches = int(math.ceil(number_of_replicates / float(batch_size)))
     if number_of_processes is None:
         number_of_processes = multiprocessing.cpu_count()
-    args = ((frag_model.get_random_copy(), locus_length, batch_size) for i in range(nbatches))
+    batch_size = int(math.ceil(number_of_replicates / float(number_of_processes)))
+    args = ((frag_model.get_random_copy(), locus_length, batch_size) for i in range(number_of_processes))
     with pool_context(processes = number_of_processes) as pool:
         results = pool.map(_mspi_sim_unpack, args)
     pi = []
@@ -561,7 +560,6 @@ class FragmentationDiversityTracker(object):
             migration_rate = 0.0,
             number_of_simulations_per_sample = 1000,
             number_of_processes = 2,
-            batch_size = 100,
             locus_length = 1):
         self._seed = seed
         self._rng = random.Random()
@@ -570,7 +568,6 @@ class FragmentationDiversityTracker(object):
         self._generation_time = float(generation_time)
         self._number_of_simulations = number_of_simulations_per_sample
         self._number_of_processes = number_of_processes
-        self._batch_size = batch_size
         self._locus_length = locus_length
         assert len(self._years_to_sample) > 0
 
@@ -601,7 +598,6 @@ class FragmentationDiversityTracker(object):
             pi, pi_b, pi_w = run_mspi_simulations(frag_model,
                     number_of_processes = self._number_of_processes,
                     number_of_replicates = self._number_of_simulations,
-                    batch_size = self._batch_size,
                     locus_length = self._locus_length)
             pi_summary = stats.SampleSummarizer(pi)
             pi_b_summary = stats.SampleSummarizer(pi_b)

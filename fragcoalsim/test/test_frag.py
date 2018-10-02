@@ -31,7 +31,6 @@ class FragmentationModelTestCase(unittest.TestCase):
         pi, pi_a, pi_w = frag.run_mspi_simulations(fm,
                 number_of_processes = None,
                 number_of_replicates = nreps,
-                batch_size = 1000,
                 locus_length = 1)
         self.assertEqual(len(pi), nreps)
         self.assertEqual(len(pi_a), nreps)
@@ -89,7 +88,6 @@ class FragmentationModelTestCase(unittest.TestCase):
         pi, pi_a, pi_w = frag.run_mspi_simulations(fm,
                 number_of_processes = None,
                 number_of_replicates = nreps,
-                batch_size = 100,
                 locus_length = 10)
         self.assertEqual(len(pi), nreps)
         self.assertEqual(len(pi_a), nreps)

@@ -11,41 +11,47 @@ import argparse
 import multiprocessing
 import math
 
-import matplotlib as mpl
+try:
+    import matplotlib as mpl
+    mpl_available = True
+except:
+    mpl_available = False
 
-# Use TrueType (42) fonts rather than Type 3 fonts
-mpl.rcParams["pdf.fonttype"] = 42
-mpl.rcParams["ps.fonttype"] = 42
-tex_font_settings = {
-        "text.usetex": True,
-        "font.family": "sans-serif",
-        # "font.serif": [
-        #         "Computer Modern Roman",
-        #         "Times",
-        #         ],
-        # "font.sans-serif": [
-        #         "Computer Modern Sans serif",
-        #         "Helvetica",
-        #         ],
-        # "font.cursive": [
-        #         "Zapf Chancery",
-        #         ],
-        # "font.monospace": [
-        #         "Computer Modern Typewriter",
-        #         "Courier",
-        #         ],
-        "text.latex.preamble" : [
-                "\\usepackage[T1]{fontenc}",
-                "\\usepackage[cm]{sfmath}",
-                ]
-}
+if mpl_available:
+    # Use TrueType (42) fonts rather than Type 3 fonts
+    mpl.rcParams["pdf.fonttype"] = 42
+    mpl.rcParams["ps.fonttype"] = 42
+    tex_font_settings = {
+            "text.usetex": True,
+            "font.family": "sans-serif",
+            # "font.serif": [
+            #         "Computer Modern Roman",
+            #         "Times",
+            #         ],
+            # "font.sans-serif": [
+            #         "Computer Modern Sans serif",
+            #         "Helvetica",
+            #         ],
+            # "font.cursive": [
+            #         "Zapf Chancery",
+            #         ],
+            # "font.monospace": [
+            #         "Computer Modern Typewriter",
+            #         "Courier",
+            #         ],
+            "text.latex.preamble" : [
+                    "\\usepackage[T1]{fontenc}",
+                    "\\usepackage[cm]{sfmath}",
+                    ]
+    }
 
-mpl.rcParams.update(tex_font_settings)
+    mpl.rcParams.update(tex_font_settings)
 
-import matplotlib.pyplot as plt
-from matplotlib import gridspec
+    import matplotlib.pyplot as plt
+    from matplotlib import gridspec
 
 import fragcoalsim
+import fragcoalsim.frag
 
 palette = [
 (57  / 255.0, 115 / 255.0, 124 / 255.0), # teal
@@ -143,17 +149,20 @@ def main(argv = sys.argv):
     else:
         args = parser.parse_args(argv)
 
+    if not mpl_available:
+        if not args.no_plot:
+            sys.stderr.write("NOTE: Could not import matplotlib, "
+                    "so turning plotting options off.\n")
+        args.no_plot = True
+
     rng = random.Random()
     if not args.seed:
         args.seed = random.randint(1, 999999999)
     rng.seed(args.seed)
 
-    batch_size = 1000
     running_simulations = False
     if args.number_of_replicates > 0:
         running_simulations = True
-        if batch_size > int(math.ceil(float(args.number_of_replicates) / args.np)):
-            batch_size = int(math.ceil(float(args.number_of_replicates) / args.np))
 
     prefix = args.prefix
     if len(prefix.split(os.path.sep)) < 2:
@@ -240,7 +249,6 @@ def main(argv = sys.argv):
                 migration_rate = args.migration_rates[i],
                 number_of_simulations_per_sample = args.number_of_replicates,
                 number_of_processes = args.np,
-                batch_size = batch_size,
                 locus_length = 1)
         if running_simulations:
             pi_tracer.run_simulations()

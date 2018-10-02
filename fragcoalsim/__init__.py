@@ -38,6 +38,7 @@ def check_external_tool(exe_path):
                 stdout = subprocess.PIPE,
                 stderr = subprocess.PIPE)
         p.terminate()
+        stdout, stderr = p.communicate()
     except subprocess.CalledProcessError:
         return exe_path
     except OSError:
@@ -50,7 +51,9 @@ def check_external_tool(exe_path):
 
 import fragcoalsim.stats
 import fragcoalsim.argparse_utils
-import fragcoalsim.frag
+# Importing frag causes ctypes to look for libmspi which breaks setup
+# installation, because it doesn't exist yet.
+# import fragcoalsim.frag
 
 def _get_git_data(repo_path):
     try:
