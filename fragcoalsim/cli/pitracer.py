@@ -51,7 +51,6 @@ if mpl_available:
     from matplotlib import gridspec
 
 import fragcoalsim
-import fragcoalsim.frag
 
 palette = [
 (57  / 255.0, 115 / 255.0, 124 / 255.0), # teal

@@ -1,3 +1,5 @@
+import os
+import re
 from setuptools import setup, Extension
 
 #######################################################################
@@ -40,11 +42,24 @@ from setuptools import setup, Extension
 # compile_mspi()
 #######################################################################
 
-from fragcoalsim import __version__
+
+def _get_version():
+    _version_pattern = re.compile(r"^\s*__version__\s*=\s*['\"](?P<version>\S+)['\"]\s*$")
+    path = os.path.join(
+            os.path.dirname(__file__),
+            "fragcoalsim",
+            "__init__.py")
+    with open(path, "r") as stream:
+        for line in stream:
+            m = _version_pattern.match(line)
+            if m:
+                return m.group("version")
+    return None
+
 
 setup(
         name = "fragcoalsim",
-        version = __version__,
+        version = _get_version(),
         description = "Package for coalescent simulations of fragmentation",
         author = "Jamie Oaks",
         author_email = "joaks1@gmail.com",

@@ -51,9 +51,7 @@ def check_external_tool(exe_path):
 
 import fragcoalsim.stats
 import fragcoalsim.argparse_utils
-# Importing frag causes ctypes to look for libmspi which breaks setup
-# installation, because it doesn't exist yet.
-# import fragcoalsim.frag
+import fragcoalsim.frag
 
 def _get_git_data(repo_path):
     try:
