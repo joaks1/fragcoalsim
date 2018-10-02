@@ -170,13 +170,12 @@ def main(argv = sys.argv):
 
     expected_div_path = prefix + "pitracer-plot-expected-div.pdf"
     sim_div_path = prefix + "pitracer-plot-sim-div.pdf"
-    overlay_path = prefix + "pitracer-plot-overlay.pdf"
     output_dir = os.path.dirname(expected_div_path)
     if not output_dir:
         output_dir = os.curdir
 
     if not args.force:
-        for p in [expected_div_path, sim_div_path, overlay_path]:
+        for p in [expected_div_path, sim_div_path]:
             if os.path.exists(p):
                 raise Exception(
                         "\nERROR: File {0!r} already exists.\n"
