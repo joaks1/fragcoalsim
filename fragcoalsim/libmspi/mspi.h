@@ -46,6 +46,14 @@ struct node{
 };
 
 void run_sims(int argc, char *argv[], double * pis, double * pis_between, double * pis_within, bool write_to_stdout);
+bool is_parent(struct node * tree, int child_index, int parent_index, int ntips);
+int get_mrca_index(struct node * tree, int node1, int node2, int ntips);
+double get_mrca_height(struct node * tree, int node1, int node2, int ntips);
+void get_mean_coal_times(
+        struct node * tree,
+        unsigned int * pop_indices,
+        int ntips,
+        double * mean_times);
 
 /*KRT -- prototypes added*/
 void ordran(int n, double pbuf[]);

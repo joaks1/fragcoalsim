@@ -17,7 +17,7 @@ _ptr_c_double = ctypes.POINTER(ctypes.c_double)
 _ptr_ptr_c_char = ctypes.POINTER(_ptr_c_char)
 _mspi.run_sims.argtypes = (ctypes.c_int, _ptr_ptr_c_char, _ptr_c_double, _ptr_c_double, _ptr_c_double, ctypes.c_bool)
 
-def mspi_run_sims(args, locus_length = 1):
+def mspi_run_sims(args):
     global _mspi
     global _ptr_c_char
     argc = len(args)
@@ -32,7 +32,7 @@ def mspi_run_sims(args, locus_length = 1):
     pis_within = (ctypes.c_double * nreps)()
     _mspi.run_sims(argc, argv, pis, pis_between, pis_within, False)
     
-    py_pis = [float(x) / locus_length for x in pis]
-    py_pis_between = [float(x) / locus_length for x in pis_between]
-    py_pis_within = [float(x) / locus_length for x in pis_within]
+    py_pis = [float(x) for x in pis]
+    py_pis_between = [float(x) for x in pis_between]
+    py_pis_within = [float(x) for x in pis_within]
     return py_pis, py_pis_between, py_pis_within

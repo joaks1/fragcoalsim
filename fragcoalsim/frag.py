@@ -160,12 +160,11 @@ def pool_context(*args, **kwargs):
     pool.terminate()
 
 def run_mspi_simulations(frag_model, number_of_processes = None,
-        number_of_replicates = 50,
-        locus_length = 1):
+        number_of_replicates = 50):
     if number_of_processes is None:
         number_of_processes = multiprocessing.cpu_count()
     batch_size = int(math.ceil(number_of_replicates / float(number_of_processes)))
-    args = ((frag_model.get_random_copy(), locus_length, batch_size) for i in range(number_of_processes))
+    args = ((frag_model.get_random_copy(), batch_size) for i in range(number_of_processes))
     with pool_context(processes = number_of_processes) as pool:
         results = pool.map(_mspi_sim_unpack, args)
     pi = []
@@ -177,8 +176,8 @@ def run_mspi_simulations(frag_model, number_of_processes = None,
         pi_within.extend(p_w)
     return pi, pi_between, pi_within
 
-def _mspi_sim(frag_model, locus_length = 1, number_of_replicates = 1):
-    return frag_model.mspi_simulate(locus_length = locus_length,
+def _mspi_sim(frag_model, number_of_replicates = 1):
+    return frag_model.mspi_simulate(
             number_of_replicates = number_of_replicates)
 
 def _mspi_sim_unpack(args):
@@ -321,11 +320,11 @@ class FragmentationModel(object):
         ms_args.extend(["-seeds", str(self._get_sim_seed())])
         return ms_args
 
-    def mspi_simulate(self, locus_length = 1, number_of_replicates = 1):
+    def mspi_simulate(self, number_of_replicates = 1):
         cmd = self.get_ms_command(
-                locus_length = locus_length,
+                locus_length = 1,
                 number_of_replicates = number_of_replicates)
-        pi, pi_b, pi_w = mspi.mspi_run_sims(cmd, locus_length)
+        pi, pi_b, pi_w = mspi.mspi_run_sims(cmd)
         assert len(pi) == number_of_replicates
         assert len(pi) == len(pi_b)
         assert len(pi) == len(pi_w)
@@ -597,8 +596,7 @@ class FragmentationDiversityTracker(object):
         for frag_model in self.fragmentation_models:
             pi, pi_b, pi_w = run_mspi_simulations(frag_model,
                     number_of_processes = self._number_of_processes,
-                    number_of_replicates = self._number_of_simulations,
-                    locus_length = self._locus_length)
+                    number_of_replicates = self._number_of_simulations)
             pi_summary = stats.SampleSummarizer(pi)
             pi_b_summary = stats.SampleSummarizer(pi_b)
             self.pi_samples.append(pi_summary)

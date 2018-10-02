@@ -30,8 +30,7 @@ class FragmentationModelTestCase(unittest.TestCase):
                 migration_rate = 0.0)
         pi, pi_a, pi_w = frag.run_mspi_simulations(fm,
                 number_of_processes = None,
-                number_of_replicates = nreps,
-                locus_length = 1)
+                number_of_replicates = nreps)
         self.assertEqual(len(pi), nreps)
         self.assertEqual(len(pi_a), nreps)
         self.assertEqual(len(pi_w), nreps)
@@ -59,7 +58,7 @@ class FragmentationModelTestCase(unittest.TestCase):
                 effective_pop_size_of_ancestor = 10000,
                 mutation_rate = 1e-6,
                 migration_rate = 0.0)
-        pi, pi_a, pi_w = fm.mspi_simulate(locus_length = 10, number_of_replicates = 20000)
+        pi, pi_a, pi_w = fm.mspi_simulate(number_of_replicates = 20000)
         mean_pi = sum(pi) / len(pi)
         mean_pi_a = sum(pi_a) / len(pi_a)
         mean_pi_w = sum(pi_w) / len(pi_w)
@@ -87,8 +86,7 @@ class FragmentationModelTestCase(unittest.TestCase):
                 migration_rate = 0.0)
         pi, pi_a, pi_w = frag.run_mspi_simulations(fm,
                 number_of_processes = None,
-                number_of_replicates = nreps,
-                locus_length = 10)
+                number_of_replicates = nreps)
         self.assertEqual(len(pi), nreps)
         self.assertEqual(len(pi_a), nreps)
         self.assertEqual(len(pi_w), nreps)
@@ -187,7 +185,7 @@ class FragmentationModelTestCase(unittest.TestCase):
                 mutation_rate = mutation_rate,
                 migration_rate = 0.0)
         self.assertEqual(fm.number_of_fragments, 2)
-        pi, pi_a, pi_w = fm.mspi_simulate(locus_length = 1, number_of_replicates = 50000)
+        pi, pi_a, pi_w = fm.mspi_simulate(number_of_replicates = 50000)
         mean_pi = sum(pi) / len(pi)
         mean_pi_a = sum(pi_a) / len(pi_a)
         print("")
@@ -239,7 +237,7 @@ class FragmentationModelTestCase(unittest.TestCase):
                 mutation_rate = 1e-6,
                 migration_rate = 0.0)
         self.assertEqual(fm.number_of_fragments, 2)
-        pi, pi_a, pi_w = fm.mspi_simulate(locus_length = 10, number_of_replicates = 50000)
+        pi, pi_a, pi_w = fm.mspi_simulate(number_of_replicates = 50000)
         mean_pi = sum(pi) / len(pi)
         mean_pi_a = sum(pi_a) / len(pi_a)
         mean_pi_w = sum(pi_w) / len(pi_w)
@@ -295,7 +293,7 @@ class FragmentationModelTestCase(unittest.TestCase):
                 mutation_rate = 1e-5,
                 migration_rate = 0.0)
         self.assertEqual(fm.number_of_fragments, 2)
-        pi, pi_a, pi_w = fm.mspi_simulate(locus_length = 1, number_of_replicates = 100000)
+        pi, pi_a, pi_w = fm.mspi_simulate(number_of_replicates = 100000)
         mean_pi = sum(pi) / len(pi)
         mean_pi_a = sum(pi_a) / len(pi_a)
         mean_pi_w = sum(pi_w) / len(pi_w)
@@ -308,8 +306,7 @@ class FragmentationModelTestCase(unittest.TestCase):
         print(fm.expected_divergence_within_fragments)
         self.assertAlmostEqual(fm.expected_divergence, mean_pi, places = 2)
         self.assertAlmostEqual(fm.expected_divergence_between_fragments, mean_pi_a, places = 2)
-        # self.assertAlmostEqual(fm.expected_divergence_within_fragments, mean_pi_w, places = 2)
-        self.assertAlmostEqual(fm.expected_divergence_within_fragments, mean_pi_w, places = 1)
+        self.assertAlmostEqual(fm.expected_divergence_within_fragments, mean_pi_w, places = 2)
 
     # def test_expected_divergence_within(self):
     #     fm = frag.FragmentationModel(
@@ -324,7 +321,7 @@ class FragmentationModelTestCase(unittest.TestCase):
     #     self.assertEqual(fm.number_of_fragments, 2)
     #     # pi_summary = stats.SampleSummarizer(
     #     #         fm.sample_pi_within(100000))
-    #     pi, pi_a, pi_w = fm.ms_simulate(locus_length = 1, number_of_replicates = 100000)
+    #     pi, pi_a, pi_w = fm.ms_simulate(number_of_replicates = 100000)
     #     mean_pi = sum(pi) / len(pi)
     #     mean_pi_a = sum(pi_a) / len(pi_a)
     #     mean_pi_w = sum(pi_w) / len(pi_w)
@@ -350,7 +347,7 @@ class FragmentationModelTestCase(unittest.TestCase):
                 mutation_rate = 1e-6,
                 migration_rate = 0.0)
         self.assertEqual(fm.number_of_fragments, 2)
-        pi, pi_a, pi_w = fm.mspi_simulate(locus_length = 1, number_of_replicates = 100000)
+        pi, pi_a, pi_w = fm.mspi_simulate(number_of_replicates = 100000)
         mean_pi = sum(pi) / len(pi)
         mean_pi_a = sum(pi_a) / len(pi_a)
         mean_pi_w = sum(pi_w) / len(pi_w)
@@ -409,7 +406,7 @@ class FragmentationModelTestCase(unittest.TestCase):
                 mutation_rate = mutation_rate,
                 migration_rate = 0.0)
         self.assertEqual(fm.number_of_fragments, 2)
-        pi, pi_a, pi_w = fm.mspi_simulate(locus_length = 1, number_of_replicates = 200000)
+        pi, pi_a, pi_w = fm.mspi_simulate(number_of_replicates = 200000)
         mean_pi = sum(pi) / len(pi)
         mean_pi_a = sum(pi_a) / len(pi_a)
         self.assertAlmostEqual(expected_div, mean_pi_a, places = 3)
@@ -435,7 +432,7 @@ class FragmentationModelTestCase(unittest.TestCase):
         self.assertEqual(fm.number_of_fragments, 10)
         # pi_summary = stats.SampleSummarizer(
         #         fm.sample_pi(400000))
-        pi, pi_a, pi_w = fm.mspi_simulate(locus_length = 1, number_of_replicates = 400000)
+        pi, pi_a, pi_w = fm.mspi_simulate(number_of_replicates = 400000)
         mean_pi_a = sum(pi_a) / len(pi_a)
         mean_pi = sum(pi) / len(pi)
         self.assertAlmostEqual(expected_div, mean_pi_a, places = 3)

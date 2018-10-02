@@ -143,8 +143,9 @@ run_sims(int argc, char *argv[], double * pis, double * pis_between, double * pi
 	double probss, tmrca, ttot ;
 	void seedit( const char * ) ;
 	void getpars( int argc, char *argv[], int *howmany )  ;
-	int gensam( char **list, double *probss, double *ptmrca, double *pttot ) ;
-
+	int gensam( char **list, double *probss, double *ptmrca, double *pttot,
+            unsigned int * pop_indices,
+            double * mean_divs);
 
 	ntbs = 0 ;   /* these next few lines are for reading in parameters from a file (for each sample) */
 	tbsparamstrs = (char **)malloc( argc*sizeof(char *) ) ;
@@ -195,13 +196,29 @@ run_sims(int argc, char *argv[], double * pis, double * pis_between, double * pi
 			 }
 			 getpars( argc, argv, &howmany) ;
 	   }
+
+        unsigned int pop_indices[pars.cp.nsam];
+        unsigned int gene_copy_index = 0;
+        for (unsigned int pop_idx = 0; pop_idx < pars.cp.npop; ++pop_idx) {
+            for (unsigned int i = 0; i < pars.cp.config[pop_idx]; ++i) {
+                pop_indices[gene_copy_index] = pop_idx;
+                ++gene_copy_index;
+            }
+        }
+        assert(gene_copy_index == pars.cp.nsam);
+
 	   
     //   fprintf(pf,"\n//");
 	//   if( ntbs >0 ){
 	//		for(k=0; k< ntbs; k++) printf("\t%s", tbsparamstrs[k] ) ;
 	//	}
 	//	printf("\n");
-        segsites = gensam( list, &probss, &tmrca, &ttot ) ; 
+        double mean_divs[3];
+        segsites = gensam( list, &probss, &tmrca, &ttot, &pop_indices[0],
+                mean_divs);
+        pis[count - 1] = mean_divs[0];
+        pis_between[count - 1] = mean_divs[1];
+        pis_within[count - 1] = mean_divs[2];
   		// if( pars.mp.timeflag ) fprintf(pf,"time:\t%lf\t%lf\n",tmrca, ttot ) ;
         //if( (segsites > 0 ) || ( pars.mp.theta > 0.0 ) ) {
    	    //   if( (pars.mp.segsitesin > 0 ) && ( pars.mp.theta > 0.0 )) 
@@ -227,66 +244,60 @@ run_sims(int argc, char *argv[], double * pis, double * pis_between, double * pi
 	    //      for(i=0;i<pars.cp.nsam; i++) { fprintf(pf,"%s\n", list[i] ); }
 	    //}
 
-        unsigned int pop_indices[pars.cp.nsam];
-        unsigned int gene_copy_index = 0;
-        for (unsigned int pop_idx = 0; pop_idx < pars.cp.npop; ++pop_idx) {
-            for (unsigned int i = 0; i < pars.cp.config[pop_idx]; ++i) {
-                pop_indices[gene_copy_index] = pop_idx;
-                ++gene_copy_index;
-            }
-        }
-        assert(gene_copy_index == pars.cp.nsam);
-
-        unsigned int ncomparisons = 0;
-        unsigned int ncomparisons_between = 0;
-        unsigned int ncomparisons_within = 0;
-        unsigned int ndiffs = 0;
-        unsigned int sum_ndiffs = 0;
-        unsigned int sum_ndiffs_between = 0;
-        unsigned int sum_ndiffs_within = 0;
-        unsigned int pop_index_1;
-        unsigned int pop_index_2;
-        double pi = 0.0;
-        double pi_between = 0.0;
-        double pi_within = 0.0;
-        if (segsites > 0) {
-            for (unsigned int seq1_idx = 0; seq1_idx < (pars.cp.nsam - 1); ++seq1_idx) {
-                pop_index_1 = pop_indices[seq1_idx];
-                for (unsigned int seq2_idx = (seq1_idx + 1); seq2_idx < pars.cp.nsam; ++seq2_idx) {
-                    assert(seq1_idx != seq2_idx);
-                    pop_index_2 = pop_indices[seq2_idx];
-                    ndiffs = 0;
-                    for (unsigned int site_idx = 0; site_idx < segsites; ++site_idx) {
-                        if (list[seq1_idx][site_idx] != list[seq2_idx][site_idx]) {
-                            ++ndiffs;
-                        }
-                    }
-                    sum_ndiffs += ndiffs;
-                    ++ncomparisons;
-                    if (pop_index_1 == pop_index_2) {
-                        sum_ndiffs_within += ndiffs;
-                        ++ncomparisons_within;
-                    } else {
-                        sum_ndiffs_between += ndiffs;
-                        ++ncomparisons_between;
-                    }
-                }
-            }
-            assert(ncomparisons == ((pars.cp.nsam * (pars.cp.nsam - 1)) / 2));
-            assert(ncomparisons == (ncomparisons_between + ncomparisons_within));
-            pi = sum_ndiffs / (double)ncomparisons;
-            pi_between = 0.0;
-            pi_within = 0.0;
-            if (ncomparisons_between > 0) {
-                pi_between = sum_ndiffs_between / (double)ncomparisons_between;
-            }
-            if (ncomparisons_within > 0) {
-                pi_within = sum_ndiffs_within / (double)ncomparisons_within;
-            }
-        }
-        pis[count - 1] = pi;
-        pis_between[count - 1] = pi_between;
-        pis_within[count - 1] = pi_within;
+        ///////////////////////////////////////////////////////////////
+        // Here I was using the segregating sites to estimate pi, but
+        // now using the branch lengths of the gene tree
+        ///////////////////////////////////////////////////////////////
+        // unsigned int ncomparisons = 0;
+        // unsigned int ncomparisons_between = 0;
+        // unsigned int ncomparisons_within = 0;
+        // unsigned int ndiffs = 0;
+        // unsigned int sum_ndiffs = 0;
+        // unsigned int sum_ndiffs_between = 0;
+        // unsigned int sum_ndiffs_within = 0;
+        // unsigned int pop_index_1;
+        // unsigned int pop_index_2;
+        // double pi = 0.0;
+        // double pi_between = 0.0;
+        // double pi_within = 0.0;
+        // if (segsites > 0) {
+        //     for (unsigned int seq1_idx = 0; seq1_idx < (pars.cp.nsam - 1); ++seq1_idx) {
+        //         pop_index_1 = pop_indices[seq1_idx];
+        //         for (unsigned int seq2_idx = (seq1_idx + 1); seq2_idx < pars.cp.nsam; ++seq2_idx) {
+        //             assert(seq1_idx != seq2_idx);
+        //             pop_index_2 = pop_indices[seq2_idx];
+        //             ndiffs = 0;
+        //             for (unsigned int site_idx = 0; site_idx < segsites; ++site_idx) {
+        //                 if (list[seq1_idx][site_idx] != list[seq2_idx][site_idx]) {
+        //                     ++ndiffs;
+        //                 }
+        //             }
+        //             sum_ndiffs += ndiffs;
+        //             ++ncomparisons;
+        //             if (pop_index_1 == pop_index_2) {
+        //                 sum_ndiffs_within += ndiffs;
+        //                 ++ncomparisons_within;
+        //             } else {
+        //                 sum_ndiffs_between += ndiffs;
+        //                 ++ncomparisons_between;
+        //             }
+        //         }
+        //     }
+        //     assert(ncomparisons == ((pars.cp.nsam * (pars.cp.nsam - 1)) / 2));
+        //     assert(ncomparisons == (ncomparisons_between + ncomparisons_within));
+        //     pi = sum_ndiffs / (double)ncomparisons;
+        //     pi_between = 0.0;
+        //     pi_within = 0.0;
+        //     if (ncomparisons_between > 0) {
+        //         pi_between = sum_ndiffs_between / (double)ncomparisons_between;
+        //     }
+        //     if (ncomparisons_within > 0) {
+        //         pi_within = sum_ndiffs_within / (double)ncomparisons_within;
+        //     }
+        // }
+        // pis[count - 1] = pi;
+        // pis_between[count - 1] = pi_between;
+        // pis_within[count - 1] = pi_within;
     }
     if (write_to_stdout) {
         fprintf(pf, "{\n\"pi\": [%.18lf", pis[0]);
@@ -313,7 +324,8 @@ run_sims(int argc, char *argv[], double * pis, double * pis_between, double * pi
 
 
 	int 
-gensam( char **list, double *pprobss, double *ptmrca, double *pttot ) 
+gensam( char **list, double *pprobss, double *ptmrca, double *pttot, unsigned int * pop_indices,
+        double * mean_divs)
 {
 	int nsegs, h, i, k, j, seg, ns, start, end, len, segsit ;
 	struct segl *seglst, *segtre_mig(struct c_params *p, int *nsegs ) ; /* used to be: [MAXSEG];  */
@@ -337,6 +349,21 @@ gensam( char **list, double *pprobss, double *ptmrca, double *pttot )
 	segsitesin = pars.mp.segsitesin ;
     theta = pars.mp.theta ;
 	mfreq = pars.mp.mfreq ;
+
+    double mean_times[3];
+    get_mean_coal_times(seglst[seg].ptree, pop_indices, nsam,
+            mean_times);
+    // Time is in 4Ne generations (i.e. generations / 4Ne), so to get time in
+    // expected substitutions per locus we need to multiply by theta (4*Ne*mu):
+    //     (gens / 4*Ne) * (4*Ne*mu) = gens*mu
+    // Then multiply by two to get expected divergence between two sequences
+    mean_divs[0] = 2.0 * mean_times[0] * theta;
+    mean_divs[1] = 2.0 * mean_times[1] * theta;
+    mean_divs[2] = 2.0 * mean_times[2] * theta;
+
+    // No need to simulate characters below; only need divs from branch lengths
+    // Return dummy value for the number of segregating sites
+    return 0;
 
 	if( pars.mp.treeflag ) {
 	  	ns = 0 ;
@@ -1220,3 +1247,80 @@ double gasdev(m,v)
 	}
 }
 
+bool is_parent(struct node * tree, int child_index, int parent_index, int ntips) {
+    int ancestor_index = tree[child_index].abv;
+    while (true) {
+        if (ancestor_index == parent_index) {
+            return true;
+        }
+        if (ancestor_index >= (2 * ntips - 2)) {
+            return false;
+        }
+        if (ancestor_index == 0) {
+            return false;
+        }
+        ancestor_index = tree[ancestor_index].abv;
+    }
+}
+
+int get_mrca_index(struct node * tree, int node1, int node2, int ntips) {
+    int root_index = 2 * ntips - 2;
+    int ancestor_index = tree[node1].abv;
+    while (true) {
+        if (is_parent(tree, node2, ancestor_index, ntips)) {
+            return ancestor_index;
+        }
+        if (ancestor_index >= (2 * ntips - 2)) {
+            return root_index;
+        }
+        ancestor_index = tree[ancestor_index].abv;
+    }
+}
+
+double get_mrca_height(struct node * tree, int node1, int node2, int ntips) {
+    int mrca_index = get_mrca_index(tree, node1, node2, ntips);
+    return tree[mrca_index].time;
+}
+
+void get_mean_coal_times(
+        struct node * tree,
+        unsigned int * pop_indices,
+        int ntips,
+        double * mean_times) {
+    double sum_times = 0.0;
+    double sum_times_within = 0.0;
+    double sum_times_between = 0.0;
+    unsigned int ncomparisons = 0;
+    unsigned int ncomparisons_between = 0;
+    unsigned int ncomparisons_within = 0;
+    unsigned int pop_index_1;
+    unsigned int pop_index_2;
+    for (unsigned int tip1_idx = 0; tip1_idx < (ntips - 1); ++tip1_idx) {
+        pop_index_1 = pop_indices[tip1_idx];
+        for (unsigned int tip2_idx = (tip1_idx + 1); tip2_idx < ntips; ++tip2_idx) {
+            assert(tip1_idx != tip2_idx);
+            pop_index_2 = pop_indices[tip2_idx];
+            double t = get_mrca_height(tree, tip1_idx, tip2_idx, ntips);
+            sum_times += t;
+            ++ncomparisons;
+            if (pop_index_1 == pop_index_2) {
+                sum_times_within += t;
+                ++ncomparisons_within;
+            } else {
+                sum_times_between += t;
+                ++ncomparisons_between;
+            }
+        }
+    }
+    assert(ncomparisons == ((ntips * (ntips - 1)) / 2));
+    assert(ncomparisons == (ncomparisons_between + ncomparisons_within));
+    mean_times[0] = sum_times / (double)ncomparisons;
+    mean_times[1] = 0.0;
+    mean_times[2] = 0.0;
+    if (ncomparisons_between > 0) {
+        mean_times[1] = sum_times_between / (double)ncomparisons_between;
+    }
+    if (ncomparisons_within > 0) {
+        mean_times[2] = sum_times_within / (double)ncomparisons_within;
+    }
+}
