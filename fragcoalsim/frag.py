@@ -558,8 +558,7 @@ class FragmentationDiversityTracker(object):
             mutation_rate = 1e-8,
             migration_rate = 0.0,
             number_of_simulations_per_sample = 1000,
-            number_of_processes = 2,
-            locus_length = 1):
+            number_of_processes = 2):
         self._seed = seed
         self._rng = random.Random()
         self._rng.seed(self._seed)
@@ -567,7 +566,6 @@ class FragmentationDiversityTracker(object):
         self._generation_time = float(generation_time)
         self._number_of_simulations = number_of_simulations_per_sample
         self._number_of_processes = number_of_processes
-        self._locus_length = locus_length
         assert len(self._years_to_sample) > 0
 
         self._number_of_fragments = number_of_fragments

@@ -246,8 +246,7 @@ def main(argv = sys.argv):
                 mutation_rate = args.mutation_rates[i],
                 migration_rate = args.migration_rates[i],
                 number_of_simulations_per_sample = args.number_of_replicates,
-                number_of_processes = args.np,
-                locus_length = 1)
+                number_of_processes = args.np)
         if running_simulations:
             pi_tracer.run_simulations()
         tracers.append(pi_tracer)
