@@ -8,9 +8,10 @@ Table of Contents
 fragcoalsim
 ============
 
-A package for coalescent simulations of fragmentation
+A package for coalescent expectations and simulations of fragmentation.
 
-This is a work in progess...
+See `example` directory for an example of how to use fragcoalsim
+(`example/pitracer-cmd.sh`) and the output that is generated.
 
 Acknowledgments
 ================
